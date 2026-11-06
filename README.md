@@ -2,6 +2,8 @@
 
 **An adaptive chess academy for learning, practicing, and improving every day.**
 
+Live preview: https://joeltocute10.github.io/chessforge/
+
 ChessForge is an early-stage chess learning platform. Its long-term goal is to combine a complete chess curriculum, legal play, tactics, opening study, game analysis, spaced repetition, and engaging daily challenges in one coherent experience.
 
 ## Current status
@@ -16,13 +18,13 @@ This repository contains the first playable foundation (v0.1):
 - Lesson catalogue with checkpoint completion.
 - Daily missions, XP, player levels, and local progress persistence.
 - Player progress dashboard.
-- GitHub Actions quality checks for builds and chess-content validation.
+- GitHub Actions build, chess-content checks, npm security audit, and Pages deployment.
 
 This is not yet a complete chess platform. Stockfish-powered analysis, engine play, PGN import/export, full opening coverage, a large puzzle database, adaptive spaced repetition, game review, and social/tournament features remain planned work.
 
 ## Run locally
 
-Requirements: Node.js 22 or later and npm.
+Requirements: Node.js 22.12 or later and npm.
 
 ```bash
 npm install
@@ -36,6 +38,7 @@ Open the local URL printed by Vite.
 ```bash
 npm run build
 npm test
+npm audit --audit-level=high
 ```
 
 ## Project structure
