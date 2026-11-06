@@ -1,0 +1,1 @@
+.filters button,.move-chips button{padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:#1a241d;color:#a7b3a5;font-size:9px;cursor:pointer}.filters button.selected,.move-chips button.played{border-color:#c1a66e66;background:#d6bd8419;color:#e0c98f}@media(max-width:620px){.filters button{padding:6px 8px;font-size:8px}}
