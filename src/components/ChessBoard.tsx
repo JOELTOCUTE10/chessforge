@@ -1,4 +1,4 @@
-import { Chess } from 'chess.js';
+import { Chess, type Square } from 'chess.js';
 import { useEffect, useMemo, useState } from 'react';
 
 const pieces: Record<string, string> = {
@@ -20,15 +20,15 @@ export default function ChessBoard({ fen, onMove, disabled = false, orientation 
   const [selected, setSelected] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<{ from: string; to: string; color: 'w' | 'b' } | null>(null);
   useEffect(() => { setSelected(null); setPromotion(null); }, [fen]);
-  const targets = useMemo(() => selected ? game.moves({ square: selected as never, verbose: true }).map((move) => move.to) : [], [game, selected]);
+  const targets = useMemo(() => selected ? game.moves({ square: selected as Square, verbose: true }).map((move) => move.to) : [], [game, selected]);
   const files = orientation === 'w' ? ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'] : ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
   const ranks = orientation === 'w' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
 
-  function handleSquare(square: string) {
+  function handleSquare(square: Square) {
     if (disabled || promotion) return;
-    const piece = game.get(square as never);
+    const piece = game.get(square);
     if (selected && targets.includes(square)) {
-      const move = game.moves({ square: selected as never, verbose: true }).find((candidate) => candidate.to === square);
+      const move = game.moves({ square: selected as Square, verbose: true }).find((candidate) => candidate.to === square);
       if (move?.flags.includes('p')) {
         setPromotion({ from: selected, to: square, color: game.turn() });
         return;
@@ -55,8 +55,8 @@ export default function ChessBoard({ fen, onMove, disabled = false, orientation 
     <div className="board-wrap">
       <div className="board" role="group" aria-label={inputLabel}>
         {ranks.flatMap((rank) => files.map((file) => {
-          const square = `${file}${rank}`;
-          const piece = game.get(square as never);
+          const square = `${file}${rank}` as Square;
+          const piece = game.get(square);
           const isLight = (files.indexOf(file) + ranks.indexOf(rank)) % 2 === 0;
           const isTarget = targets.includes(square);
           const isLast = lastMove?.from === square || lastMove?.to === square;

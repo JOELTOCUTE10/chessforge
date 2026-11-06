@@ -24,7 +24,7 @@ export default function App() {
   const navigate=(next:Tab)=>{setTab(next);setMobile(false);setLesson(null);setNotice('');};
   function finishLesson(item:Module){
     if(!progress.completedLessons.includes(item.id)){
-      setProgress(p=>{let n={...p,completedLessons:[...p.completedLessons,item.id],dailyLessonCount:p.dailyLessonCount+1,missionDate:todayKey()};n=awardXp(n,item.xp);if(!n.completedMissions.includes('learn'))n={...awardXp(n,120),completedMissions:[...n.completedMissions,'learn']};return n;});
+      setProgress(p=>{let n:ProgressState={...p,completedLessons:[...p.completedLessons,item.id],dailyLessonCount:p.dailyLessonCount+1,missionDate:todayKey()};n=awardXp(n,item.xp);if(!n.completedMissions.includes('learn'))n={...awardXp(n,120),completedMissions:[...n.completedMissions,'learn']};return n;});
       setNotice(`Lesson completed. +${item.xp} XP.`);
     }
     setLesson(null);
