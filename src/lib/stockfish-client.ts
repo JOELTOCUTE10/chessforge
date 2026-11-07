@@ -106,7 +106,7 @@ export class StockfishClient {
       throw new Error('Stockfish is not ready.');
     }
 
-    return new Promise<string | null>((resolve, reject) => {
+    return new Promise<EngineSearchResult | null>((resolve, reject) => {
       const clampedTime = Math.max(100, Math.min(5000, Math.round(movetimeMs)));
       const clampedSkill = Math.max(0, Math.min(20, Math.round(skillLevel)));
       const task: PendingSearch = {
