@@ -71,3 +71,52 @@
   .engine-status{grid-column:1/-1}
   .engine-evaluation{gap:9px;flex-wrap:wrap}
 }
+
+/* PGN game review and engine-assisted move analysis */
+.analysis-input{padding:15px}
+.analysis-input-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.analysis-input-heading small,.analysis-controls label>span,.analysis-footnote,.analysis-progress span,.analysis-detail>small,.best-move-callout small{color:#91a091;font:8px 'DM Mono';letter-spacing:.1em}
+.analysis-input-heading h2{margin:5px 0 0;font:700 17px Manrope}
+.analysis-pgn{display:block;width:100%;resize:vertical;min-height:135px;padding:11px;border:1px solid #3d4b40;border-radius:8px;background:#121b15;color:#e4ebe0;font:10px 'DM Mono';line-height:1.55}
+.analysis-pgn:focus{outline:2px solid #c6ab72;outline-offset:1px}
+.analysis-controls{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:12px}
+.analysis-controls label{display:grid;gap:5px;min-width:210px;flex:1}
+.analysis-controls select{height:36px;padding:0 10px;border:1px solid #3b4b3e;border-radius:7px;background:#1c2820;color:#dce5d8;font:9px 'DM Sans'}
+.analysis-footnote{margin:10px 0 0;letter-spacing:0;line-height:1.5}
+.analysis-progress{margin-top:13px}
+.analysis-progress>div{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;color:#dce6d9;font-size:9px}
+.analysis-progress i{display:block;height:6px;overflow:hidden;border-radius:8px;background:#344136}
+.analysis-progress i b{display:block;height:100%;background:linear-gradient(90deg,#83b493,#d8c28c);transition:width .2s}
+.analysis-error{margin:11px 0 0;color:#e1a79b;font-size:10px}
+.analysis-note{color:#9aa798;font-size:8px;line-height:1.6}
+.analysis-results-section{margin-top:22px}
+.analysis-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.analysis-summary>div{display:grid;gap:5px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#19231c}
+.analysis-summary small{color:#96a394;font:8px 'DM Mono';letter-spacing:.08em}
+.analysis-summary b{font:700 20px Manrope;color:#e6ede4}
+.analysis-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:12px;align-items:start}
+.analysis-move-list{display:grid;gap:5px;max-height:600px;overflow:auto}
+.analysis-move{display:grid;grid-template-columns:32px 42px minmax(0,1fr) 54px;align-items:center;gap:7px;width:100%;padding:9px;border:1px solid var(--line);border-radius:7px;background:#19231c;color:#dfe7dc;text-align:left}
+.analysis-move:hover,.analysis-move.selected{border-color:#c5ab75;background:#d6bd8411}
+.analysis-move-number{color:#8e9c8d;font:8px 'DM Mono'}
+.analysis-move>b{font:700 11px Manrope}
+.analysis-move>small{color:#9aa798;text-align:right;font:8px 'DM Mono'}
+.analysis-quality{font:8px 'DM Mono';text-transform:uppercase}
+.analysis-quality.sound{color:#94bc9b}
+.analysis-quality.inaccuracy{color:#d5c085}
+.analysis-quality.mistake{color:#d9a66e}
+.analysis-quality.blunder{color:#d88f84}
+.analysis-quality.unrated{color:#95a294}
+.analysis-detail{padding:13px}
+.analysis-detail h3{margin:5px 0 10px;font:700 18px Manrope}
+.analysis-board{width:min(100%,340px);margin:0 auto 10px}
+.analysis-detail-quality{margin:7px 0;color:#a7b3a4;font:9px 'DM Mono';text-transform:uppercase}
+.analysis-detail-quality.inaccuracy{color:#d5c085}
+.analysis-detail-quality.mistake{color:#d9a66e}
+.analysis-detail-quality.blunder{color:#d88f84}
+.analysis-detail p{color:#a4b09f;font-size:9px;line-height:1.55}
+.best-move-callout{display:grid;gap:4px;margin-top:10px;padding:11px;border:1px solid #4a553e;border-radius:8px;background:#d6bd8410}
+.best-move-callout b{color:#e0c78d;font:700 19px Manrope}
+.best-move-callout span{color:#a3ae9f;font-size:8px}
+@media(max-width:760px){.analysis-layout{grid-template-columns:1fr}.analysis-detail{order:-1}}
+@media(max-width:620px){.analysis-input{padding:10px}.analysis-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-controls label{min-width:100%}.analysis-controls .btn{width:100%}.analysis-move{grid-template-columns:26px 36px minmax(0,1fr) 44px;padding:7px;gap:5px}}

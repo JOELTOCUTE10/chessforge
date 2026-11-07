@@ -1,3 +1,8 @@
+export type EngineSearchResult = {
+  bestMove: string;
+  info: EngineInfo | null;
+};
+
 export type EngineInfo = {
   depth: number | null;
   scoreCp: number | null;
@@ -17,7 +22,8 @@ type PendingSearch = {
   skillLevel: number;
   waitingForReady: boolean;
   cancelled: boolean;
-  resolve: (move: string | null) => void;
+  resolve: (result: EngineSearchResult | null) => void;
+  latestInfo: EngineInfo | null;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
 };
@@ -92,7 +98,7 @@ export class StockfishClient {
     return this.initialization;
   }
 
-  async findBestMove(fen: string, movetimeMs: number, skillLevel: number): Promise<string | null> {
+  async findBestMove(fen: string, movetimeMs: number, skillLevel: number): Promise<EngineSearchResult | null> {
     await this.initialize();
     await this.waitUntilIdle();
 
@@ -111,6 +117,7 @@ export class StockfishClient {
         cancelled: false,
         resolve,
         reject,
+        latestInfo: null,
         timeout: setTimeout(() => {
           this.failWorker(new Error('Stockfish search timed out. Try a shorter search or restart the engine.'));
         }, clampedTime + 20000),
@@ -186,7 +193,22 @@ export class StockfishClient {
 
     if (message.startsWith('info ')) {
       const info = parseUciInfoLine(message);
-      if (info) this.callbacks.onInfo?.(info);
+      if (info) {
+        const pending = this.pending;
+        if (pending) {
+          const previous = pending.latestInfo;
+          pending.latestInfo = {
+            depth: info.depth ?? previous?.depth ?? null,
+            scoreCp: info.scoreCp ?? previous?.scoreCp ?? null,
+            scoreMate: info.scoreMate ?? previous?.scoreMate ?? null,
+            nodes: info.nodes ?? previous?.nodes ?? null,
+            principalVariation: info.principalVariation.length
+              ? info.principalVariation
+              : previous?.principalVariation ?? [],
+          };
+        }
+        this.callbacks.onInfo?.(info);
+      }
       return;
     }
 
@@ -199,7 +221,7 @@ export class StockfishClient {
         pending.resolve(null);
       } else {
         const move = parseUciBestMoveLine(message);
-        if (move) pending.resolve(move);
+        if (move) pending.resolve({ bestMove: move, info: pending.latestInfo });
         else pending.reject(new Error('Stockfish did not return a move for this position.'));
       }
       this.flushIdleWaiters();

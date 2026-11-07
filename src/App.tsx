@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, Cpu, Crown, Flame, Gamepad2, GraduationCap, Lightbulb, Menu, RotateCcw, Sparkles, Target, Trophy, Undo2, X } from 'lucide-react';
+import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, ClipboardCheck, Cpu, Crown, Flame, Gamepad2, GraduationCap, Lightbulb, Menu, RotateCcw, Sparkles, Target, Trophy, Undo2, X } from 'lucide-react';
 import { Chess } from 'chess.js';
 import ChessBoard from './components/ChessBoard';
 import { dailyMissions, modules, openings, type Module } from './data/content';
@@ -8,12 +8,13 @@ import { lessonContent } from './data/lesson-content';
 import { playerLevel, readProgress, writeProgress, recordLessonComplete, recordLessonReview, recordPuzzleSolve, recordPracticeMove, getDueReviewCards, type ProgressState } from './lib/progress';
 import type { ReviewGrade } from './lib/spaced-repetition';
 import { StockfishClient, type EngineInfo } from './lib/stockfish-client';
+import { centipawnLoss, classifyCentipawnLoss, moveQualityExplanation, moveQualityLabel, type MoveQuality } from './lib/game-analysis';
 
-type Tab = 'home'|'learn'|'puzzles'|'openings'|'play'|'progress';
+type Tab = 'home'|'learn'|'puzzles'|'openings'|'play'|'analysis'|'progress';
 const navigation: {id:Tab;label:string;icon:typeof Activity}[] = [
   {id:'home',label:'Overview',icon:Activity},{id:'learn',label:'Academy',icon:GraduationCap},
   {id:'puzzles',label:'Tactics lab',icon:Target},{id:'openings',label:'Opening library',icon:BookOpen},
-  {id:'play',label:'Practice board',icon:Gamepad2},{id:'progress',label:'My progress',icon:Trophy},
+  {id:'play',label:'Practice board',icon:Gamepad2},{id:'analysis',label:'Game review',icon:ClipboardCheck},{id:'progress',label:'My progress',icon:Trophy},
 ];
 
 export default function App() {
@@ -62,6 +63,7 @@ export default function App() {
         {tab==='puzzles'&&<PuzzlePage onSolved={recordPuzzle}/>}
         {tab==='openings'&&<OpeningsPage/>}
         {tab==='play'&&<PlayPage onMove={recordMove}/>}
+        {tab==='analysis'&&<AnalysisPage/>}
         {tab==='progress'&&<ProgressPage progress={progress} level={level} navigate={navigate}/>}
       </div>
       <footer className="footer"><span>CHESSFORGE · BUILD YOUR CHESS MIND</span><span>Practice with purpose. Improve with proof.</span></footer>
@@ -205,12 +207,14 @@ function PlayPage({onMove}:{onMove:()=>void}){
     setEngineStatus('Thinking…');
     setEngineError('');
 
-    client.findBestMove(fen,settings.movetimeMs,settings.skillLevel).then(uci=>{
+    client.findBestMove(fen,settings.movetimeMs,settings.skillLevel).then(result=>{
       if(cancelled)return;
-      if(!uci){
+      if(!result){
         setEngineStatus('Ready');
         return;
       }
+      setEngineInfo(result.info);
+      const uci=result.bestMove;
       const next=new Chess(fen);
       const move=next.move({
         from:uci.slice(0,2) as never,
@@ -382,6 +386,192 @@ function PlayPage({onMove}:{onMove:()=>void}){
   </>;
 }
 
+
+function uciToSan(fen:string,uci:string|null):string|null {
+  if(!uci)return null;
+  try{
+    const board=new Chess(fen);
+    const move=board.move({
+      from:uci.slice(0,2) as never,
+      to:uci.slice(2,4) as never,
+      promotion:(uci[4]??'q') as never,
+    });
+    return move?.san??null;
+  }catch{return null;}
+}
+
+type GameReviewRow = {
+  ply:number;
+  moveNumber:number;
+  color:'w'|'b';
+  san:string;
+  bestMoveSan:string|null;
+  lossCp:number|null;
+  quality:MoveQuality;
+  beforeFen:string;
+  afterFen:string;
+  terminal:boolean;
+};
+
+function AnalysisPage(){
+  const [pgn,setPgn]=useState('');
+  const [searchMs,setSearchMs]=useState(220);
+  const [status,setStatus]=useState<'idle'|'running'|'complete'|'cancelled'|'error'>('idle');
+  const [error,setError]=useState('');
+  const [progress,setProgress]=useState({done:0,total:0});
+  const [rows,setRows]=useState<GameReviewRow[]>([]);
+  const [selected,setSelected]=useState(0);
+  const [liveInfo,setLiveInfo]=useState<EngineInfo|null>(null);
+  const clientRef=useRef<StockfishClient|null>(null);
+  const cancelledRef=useRef(false);
+
+  useEffect(()=>()=>{cancelledRef.current=true;clientRef.current?.dispose();clientRef.current=null;},[]);
+
+  async function analyzeGame(){
+    setError('');
+    setRows([]);
+    setSelected(0);
+    setProgress({done:0,total:0});
+    setLiveInfo(null);
+    cancelledRef.current=false;
+
+    let startingFen:string;
+    let moves:any[];
+    try{
+      const normalized=pgn.replaceAll(String.fromCharCode(13),'');
+      const parsed=new Chess();
+      parsed.loadPgn(normalized,{strict:true});
+      const fenLine=normalized.split(String.fromCharCode(10)).find(line=>line.startsWith('[FEN "'));
+      startingFen=fenLine?fenLine.substring(6,fenLine.length-2):new Chess().fen();
+      moves=parsed.history({verbose:true}) as any[];
+      if(!moves.length)throw new Error('This PGN does not contain any moves.');
+      if(moves.length>80)throw new Error('For this first version, analyze games with 80 plies (40 moves per side) or fewer.');
+    }catch(err){
+      setStatus('error');
+      setError(err instanceof Error?err.message:'The PGN could not be parsed. Check the notation and try again.');
+      return;
+    }
+
+    const client=new StockfishClient({onInfo:setLiveInfo});
+    clientRef.current=client;
+    setStatus('running');
+    setProgress({done:0,total:moves.length});
+
+    try{
+      await client.initialize();
+      if(cancelledRef.current)return;
+
+      const replay=new Chess(startingFen);
+      let previousSearch=await client.findBestMove(replay.fen(),searchMs,18);
+      if(!previousSearch?.bestMove)throw new Error('Stockfish did not return an evaluation for the starting position.');
+
+      const results:GameReviewRow[]=[];
+      for(let index=0;index<moves.length;index++){
+        if(cancelledRef.current)return;
+
+        const beforeFen=replay.fen();
+        const sourceMove=moves[index];
+        const color=replay.turn();
+        const played=replay.move(sourceMove.san);
+        const afterFen=replay.fen();
+        const terminal=replay.isGameOver();
+        const nextSearch=terminal?null:await client.findBestMove(afterFen,searchMs,18);
+        if(cancelledRef.current)return;
+
+        const lossCp=nextSearch?centipawnLoss(previousSearch.info,nextSearch.info):null;
+        const quality=terminal?'unrated':classifyCentipawnLoss(lossCp);
+        const bestMoveSan=uciToSan(beforeFen,previousSearch.bestMove);
+        results.push({
+          ply:index+1,
+          moveNumber:Math.floor(index/2)+1,
+          color,
+          san:played.san,
+          bestMoveSan,
+          lossCp,
+          quality,
+          beforeFen,
+          afterFen,
+          terminal,
+        });
+        setRows(results.slice());
+        setSelected(results.length-1);
+        setProgress({done:index+1,total:moves.length});
+
+        if(terminal)break;
+        if(!nextSearch?.bestMove)throw new Error('Stockfish stopped returning moves during the review.');
+        previousSearch=nextSearch;
+      }
+      setStatus('complete');
+    }catch(err){
+      if(!cancelledRef.current){
+        setStatus('error');
+        setError(err instanceof Error?err.message:'Game analysis failed. Try a shorter PGN.');
+      }
+    }finally{
+      if(clientRef.current===client)clientRef.current=null;
+      client.dispose();
+    }
+  }
+
+  function cancelAnalysis(){
+    cancelledRef.current=true;
+    clientRef.current?.stop();
+    setStatus('cancelled');
+  }
+
+  const counts=rows.reduce((result,row)=>{
+    result[row.quality]=(result[row.quality]??0)+1;
+    return result;
+  },{} as Record<string,number>);
+  const selectedRow=rows[selected]??null;
+
+  return <>
+    <PageTitle eyebrow="GAME REVIEW" title="Learn from your own games." subtitle="Paste a PGN and let Stockfish examine the positions, compare your moves with stronger alternatives, and highlight large evaluation swings."/>
+    <section className="panel analysis-input">
+      <div className="analysis-input-heading"><div><small>IMPORT A GAME</small><h2>Paste your PGN</h2></div><span className="pill">STOCKFISH 18</span></div>
+      <textarea className="analysis-pgn" value={pgn} onChange={event=>setPgn(event.target.value)} placeholder={'[Event "Casual game"]\n[White "You"]\n[Black "Opponent"]\n\n1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6'} rows={8} disabled={status==='running'}/>
+      <div className="analysis-controls">
+        <label><span>Search time per position</span><select value={searchMs} onChange={event=>setSearchMs(Number(event.target.value))} disabled={status==='running'}><option value={140}>Quick · 140 ms</option><option value={220}>Balanced · 220 ms</option><option value={450}>Deeper · 450 ms</option></select></label>
+        {status==='running'
+          ? <button className="btn secondary" onClick={cancelAnalysis}><X/> Cancel analysis</button>
+          : <button className="btn primary" onClick={analyzeGame} disabled={!pgn.trim()}><ClipboardCheck/> Analyze game</button>}
+      </div>
+      <p className="analysis-footnote">Analysis runs locally in your browser. The first use loads Stockfish. Longer games and deeper searches require more processing.</p>
+      {status==='running'&&<div className="analysis-progress"><div><b>Analyzing move {progress.done} of {progress.total}</b><span>{liveInfo?.depth?'Depth '+liveInfo.depth:'Searching position'}</span></div><i><b style={{width:(progress.total?progress.done/progress.total*100:0)+'%'}}/></i></div>}
+      {error&&<p className="analysis-error">{error}</p>}
+      {status==='cancelled'&&<p className="analysis-note">Analysis was cancelled. The positions completed so far remain visible.</p>}
+    </section>
+
+    {rows.length>0&&<section className="section analysis-results-section">
+      <header><div><small>YOUR GAME REPORT</small><h2>{status==='complete'?'Review complete':'Analysis so far'}</h2></div><span className="pill">{rows.length} PLY REVIEWED</span></header>
+      <div className="analysis-summary">
+        <div><small>BLUNDERS</small><b>{counts.blunder??0}</b></div>
+        <div><small>MISTAKES</small><b>{counts.mistake??0}</b></div>
+        <div><small>INACCURACIES</small><b>{counts.inaccuracy??0}</b></div>
+        <div><small>NO LARGE SWING</small><b>{counts.sound??0}</b></div>
+      </div>
+      <div className="analysis-layout">
+        <div className="analysis-move-list">
+          {rows.map((row,index)=><button key={row.ply} className={'analysis-move '+(selected===index?'selected':'')} onClick={()=>setSelected(index)}>
+            <span className="analysis-move-number">{row.moveNumber}{row.color==='w'?'.':'…'}</span>
+            <b>{row.san}</b>
+            <span className={'analysis-quality '+row.quality}>{row.terminal?'Game end':moveQualityLabel(row.quality)}</span>
+            <small>{row.lossCp===null?'—':Math.max(0,row.lossCp)+' cp'}</small>
+          </button>)}
+        </div>
+        {selectedRow&&<aside className="panel analysis-detail">
+          <small>{selectedRow.moveNumber}{selectedRow.color==='w'?'.':'…'} · {selectedRow.color==='w'?'WHITE':'BLACK'}</small>
+          <h3>{selectedRow.san}</h3>
+          <div className="analysis-board"><ChessBoard fen={selectedRow.beforeFen} onMove={()=>undefined} disabled/></div>
+          <div className={'analysis-detail-quality '+selectedRow.quality}>{selectedRow.terminal?'Game ended':moveQualityLabel(selectedRow.quality)}</div>
+          <p>{selectedRow.terminal?'This move ended the game.':moveQualityExplanation(selectedRow.quality,selectedRow.lossCp)}</p>
+          {selectedRow.bestMoveSan&&<div className="best-move-callout"><small>ENGINE'S PREFERRED MOVE</small><b>{selectedRow.bestMoveSan}</b><span>Compare the idea with the move you played.</span></div>}
+          <p className="analysis-note">Centipawn loss is an engine estimate at the selected search time, not an official rating or a perfect measure of human difficulty. Review the position and candidate moves before drawing a conclusion.</p>
+        </aside>}
+      </div>
+    </section>}
+  </>;
+}
 
 function ProgressPage({progress,level,navigate}:{progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void}){const percent=Math.max(0,Math.min(100,(progress.xp-level.current)/(level.next-level.current)*100));const skills=[['Foundations','Board vision and piece safety',progress.completedLessons.includes('board-vision')?1:0,1],['Tactical vision','Patterns and forcing moves',progress.solvedPuzzles.length,5],['Calculation','Candidate moves and variations',progress.completedLessons.includes('forcing-moves')?1:0,4],['Strategy','Plans and pawn structures',progress.completedLessons.filter(id=>['pawn-structures','prophylaxis'].includes(id)).length,5],['Endgames','Technical and practical endings',progress.completedLessons.includes('rook-endgames')?1:0,5]] as const;return <><PageTitle eyebrow="YOUR PLAYER PROFILE" title="Progress you can build on." subtitle="Track what you've completed and which areas of chess you've explored."/><div className="rank-card panel"><Crown/><div><small>YOUR CURRENT RANK</small><h2>Level {level.level} · {level.title}</h2><p>{progress.xp.toLocaleString()} XP earned</p></div><strong>{String(level.level).padStart(2,'0')}</strong><div className="rank-progress"><span>{level.next-progress.xp} XP to next level</span><i><b style={{width:`${percent}%`}}/></i></div></div><div className="stats"><Stat label="CURRENT STREAK" value={String(progress.streak)} detail="active days" icon={<Flame/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length)} detail={`of ${modules.length}`} icon={<GraduationCap/>}/><Stat label="POSITIONS SOLVED" value={String(progress.solvedPuzzles.length)} detail="unique puzzles" icon={<Target/>}/><Stat label="MOVES PRACTICED" value={String(progress.playedMoves)} detail="legal moves" icon={<Gamepad2/>}/></div><section className="section"><header><div><small>SKILL DEVELOPMENT</small><h2>Your chess profile</h2></div><span className="pill">EARLY ACCESS</span></header><div className="skill-list panel">{skills.map(s=><div className="skill-row" key={s[0]}><div><b>{s[0]}</b><span>{s[1]}</span></div><i><b style={{width:`${Math.min(100,s[2]/s[3]*100)}%`}}/></i><strong>{s[2]}/{s[3]}</strong></div>)}</div></section><div className="next-step"><div><small>KEEP BUILDING</small><h3>Your next best step</h3><p>Continue through the academy and return to the tactics lab.</p></div><button className="btn primary" onClick={()=>navigate('learn')}>Continue learning <ChevronRight/></button></div></>;}
 
