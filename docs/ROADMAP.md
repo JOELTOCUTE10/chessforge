@@ -13,8 +13,8 @@
 
 ## Release 0.2 — complete practice loop
 
-- [ ] Stockfish WebAssembly worker integration and engine settings
-- [ ] Human versus engine practice with adjustable strength
+- [x] Stockfish 18 Lite Single WebAssembly worker integration and engine settings
+- [x] Human versus engine practice with adjustable strength, plus a CI UCI runtime smoke test
 - [x] PGN import/export for local practice games
 - [ ] Saved-game library with tags, search, and cloud sync
 - [ ] Full puzzle attempt records, themes, difficulty, and accuracy metrics
