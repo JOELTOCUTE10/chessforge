@@ -15,12 +15,13 @@ This repository contains the first playable foundation (v0.1):
 - Practice board with move history, undo, reset, board flip, promotion selection, and PGN import/export.
 - Starter tactics set with solution feedback and hints.
 - Starter opening explorer with move-by-move board playback.
-- Lesson catalogue with checkpoint completion.
+- Six guided starter lessons with four concept explanations and three knowledge checks per topic.
+- A local spaced-review scheduler with self-rated recall and a due-review queue on the dashboard and Academy page.
 - Daily missions, XP, player levels, and local progress persistence.
 - Player progress dashboard.
 - GitHub Actions build, chess-content checks, npm security audit, and Pages deployment.
 
-This is not yet a complete chess platform. Stockfish-powered analysis, engine play, full opening coverage, a large puzzle database, adaptive spaced repetition, game review, a saved-game library, and social/tournament features remain planned work.
+This is not yet a complete chess platform. Stockfish-powered analysis, engine play, full opening coverage, a large puzzle database, game review, a saved-game library, and social/tournament features remain planned work. The current review scheduler is a transparent local heuristic driven by the learner’s recall rating; it is not a validated chess-strength score and does not sync across devices.
 
 ## Run locally
 
@@ -49,6 +50,7 @@ src/
   data/content.ts             Starter lessons, opening lines, daily missions
   data/puzzles.ts             Curated starter tactical positions
   lib/progress.ts             Local progress, XP, streak, level calculations
+  lib/spaced-repetition.ts    Self-rated recall intervals and due-review selection
   App.tsx                     Application pages and experience
   styles.css                  Responsive visual system
 ```

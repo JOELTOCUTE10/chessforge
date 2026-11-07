@@ -7,7 +7,7 @@
 - [x] Promotion selection, undo, board flip, and reset
 - [x] Starter tactical puzzle interactions and hints
 - [x] Opening line playback
-- [x] Lesson catalogue and completion checkpoints
+- [x] Six guided lessons with concept explanations and three-question knowledge checks
 - [x] Local XP, levels, daily missions, and progress
 - [x] Automated chess-content validation
 
@@ -19,7 +19,8 @@
 - [ ] Saved-game library with tags, search, and cloud sync
 - [ ] Full puzzle attempt records, themes, difficulty, and accuracy metrics
 - [ ] Interactive lesson positions with guided move trees
-- [ ] Real spaced-repetition scheduling with due reviews
+- [x] Local spaced-review scheduling, self-rated recall, and dashboard due-review queue
+- [ ] Adaptive question variants and skill-based question selection
 - [ ] Daily mission rotation and richer session summaries
 
 ## Release 0.3 — opening and game intelligence
