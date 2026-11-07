@@ -1,14 +1,19 @@
+import { access } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
-
-const require = createRequire(import.meta.url);
-const stockfish = require('stockfish') as { findEngine: (flavor: string) => string };
 
 describe('Stockfish 18 runtime', () => {
   it('starts, completes the UCI handshake, and returns a move', async () => {
-    const enginePath = stockfish.findEngine('lite-single');
+    const engineDirectory = resolve(process.cwd(), 'node_modules', 'stockfish', 'bin');
+    const enginePath = resolve(engineDirectory, 'stockfish-18-lite-single.js');
+    const wasmPath = resolve(engineDirectory, 'stockfish-18-lite-single.wasm');
+
+    await access(enginePath);
+    await access(wasmPath);
+
     const child = spawn(process.execPath, [enginePath], {
+      cwd: engineDirectory,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
@@ -21,29 +26,36 @@ describe('Stockfish 18 runtime', () => {
     child.stderr.on('data', (chunk: string) => { stderr += chunk; });
 
     const waitFor = (pattern: RegExp, timeoutMs: number): Promise<void> =>
-      new Promise((resolve, reject) => {
+      new Promise((resolvePromise, rejectPromise) => {
+        const cleanup = () => {
+          clearTimeout(timer);
+          child.stdout.off('data', onData);
+          child.off('exit', onExit);
+          child.off('error', onError);
+        };
         const check = () => {
           if (pattern.test(output)) {
-            clearTimeout(timer);
-            child.stdout.off('data', onData);
-            child.off('exit', onExit);
-            resolve();
+            cleanup();
+            resolvePromise();
           }
         };
         const onData = () => check();
         const onExit = (code: number | null) => {
-          clearTimeout(timer);
-          child.stdout.off('data', onData);
-          reject(new Error('Stockfish exited before replying (code ' + code + '). Output: ' + output + ' ' + stderr));
+          cleanup();
+          rejectPromise(new Error('Stockfish exited before replying (code ' + code + '). Output: ' + output + ' ' + stderr));
+        };
+        const onError = (error: Error) => {
+          cleanup();
+          rejectPromise(error);
         };
         const timer = setTimeout(() => {
-          child.stdout.off('data', onData);
-          child.off('exit', onExit);
-          reject(new Error('Timed out waiting for ' + pattern + '. Output: ' + output + ' ' + stderr));
+          cleanup();
+          rejectPromise(new Error('Timed out waiting for ' + pattern + '. Output: ' + output + ' ' + stderr));
         }, timeoutMs);
 
         child.stdout.on('data', onData);
         child.on('exit', onExit);
+        child.on('error', onError);
         check();
       });
 
@@ -64,7 +76,7 @@ describe('Stockfish 18 runtime', () => {
       const match = output.match(/^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?)(?:\s|$)/m);
       expect(match?.[1]).toMatch(/^[a-h][1-8][a-h][1-8][qrbn]?$/);
     } finally {
-      if (child.exitCode === null) {
+      if (child.exitCode === null && child.signalCode === null) {
         child.stdin.write('quit\n');
         child.kill();
       }
