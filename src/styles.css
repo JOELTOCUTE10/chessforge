@@ -39,3 +39,35 @@
 .rating-button{min-height:34px;padding:6px;border:1px solid #495342;border-radius:6px;background:#1c2820;color:#b7c2b1;font-size:8px}
 .rating-button.selected{border-color:#d5bd85;background:#d5bd8520;color:#f0d89e}
 @media(max-width:620px){.rating-options{grid-template-columns:repeat(2,minmax(0,1fr))}.review-card{gap:8px;padding:9px}.review-copy b{font-size:9px}.review-action{font-size:8px}}
+
+/* Browser Stockfish opponent controls */
+.engine-control{padding:14px;margin-bottom:13px}
+.engine-control-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.engine-control-heading>div:first-child{display:grid;gap:5px}
+.engine-control-heading small,.engine-settings label>span,.engine-evaluation small{color:#91a091;font:8px 'DM Mono';letter-spacing:.11em}
+.engine-control-heading b{color:#e2eadf;font:700 12px Manrope}
+.engine-mode-tabs{display:flex;gap:5px;padding:3px;border:1px solid var(--line);border-radius:8px;background:#141d17}
+.engine-mode-tabs button{display:flex;align-items:center;gap:6px;min-height:31px;padding:0 10px;border:1px solid transparent;border-radius:6px;background:transparent;color:#aab6a8;font-size:9px}
+.engine-mode-tabs button svg{width:14px}
+.engine-mode-tabs button.selected{border-color:#c7ae7555;background:#d6bd8418;color:#e0c88e}
+.engine-settings{display:grid;grid-template-columns:1fr 1.3fr auto;align-items:end;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid #ffffff0c}
+.engine-settings label{display:grid;gap:5px}
+.engine-settings select{height:35px;padding:0 9px;border:1px solid #3b4b3e;border-radius:7px;background:#1c2820;color:#dce5d8;font:9px 'DM Sans'}
+.engine-status{display:flex;align-items:center;gap:7px;min-height:34px;padding:0 9px;border:1px solid var(--line);border-radius:7px;color:#b9c4b6;font-size:9px;white-space:nowrap}
+.engine-status i{width:7px;height:7px;border-radius:50%;background:#d0ad67}
+.engine-status.ready i{background:#8cbd95}
+.engine-error{margin:9px 0 0;color:#e3a99c;font-size:9px;line-height:1.5}
+.engine-evaluation{display:flex;align-items:center;gap:16px;margin-top:11px;padding:9px 11px;border:1px solid #44553e;border-radius:8px;background:#d4bd840b}
+.engine-evaluation>div{display:grid;gap:4px;margin-right:auto}
+.engine-evaluation b{color:#e2c98f;font:700 16px Manrope}
+.engine-evaluation span{color:#9eab9c;font:8px 'DM Mono'}
+.engine-footnote{margin:9px 0 0;color:#869486;font-size:8px;line-height:1.5}
+@media(max-width:620px){
+  .engine-control{padding:10px}
+  .engine-control-heading{align-items:flex-start;flex-direction:column}
+  .engine-mode-tabs{width:100%}
+  .engine-mode-tabs button{flex:1;justify-content:center}
+  .engine-settings{grid-template-columns:1fr 1fr}
+  .engine-status{grid-column:1/-1}
+  .engine-evaluation{gap:9px;flex-wrap:wrap}
+}

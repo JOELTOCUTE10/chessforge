@@ -4,56 +4,54 @@
 
 Live preview: https://joeltocute10.github.io/chessforge/
 
-ChessForge is an early-stage chess learning platform. Its long-term goal is to combine a complete chess curriculum, legal play, tactics, opening study, game analysis, spaced repetition, and engaging daily challenges in one coherent experience.
+ChessForge is an early-stage chess learning platform. Its goal is to combine a broad chess curriculum, legal play, tactics, opening study, game analysis, spaced review, and engaging daily challenges in one coherent experience.
 
 ## Current status
 
-This repository contains the first playable foundation (v0.1):
+The current playable foundation includes:
 
 - Responsive dashboard and navigation.
-- Legal chess move handling through `chess.js`.
-- Practice board with move history, undo, reset, board flip, promotion selection, and PGN import/export.
-- Starter tactics set with solution feedback and hints.
+- Legal chess move handling through chess.js.
+- Local two-player practice with move history, undo, reset, board flip, and promotion selection.
+- Play against Stockfish 18 Lite Single in a browser Web Worker with three adjustable thinking levels.
+- PGN import/export for local practice games.
+- Starter tactical puzzles with solution feedback and hints.
 - Starter opening explorer with move-by-move board playback.
-- Six guided starter lessons with four concept explanations and three knowledge checks per topic.
-- A local spaced-review scheduler with self-rated recall and a due-review queue on the dashboard and Academy page.
+- Six guided lessons with concept explanations and three knowledge checks each.
+- Local spaced-review scheduling, self-rated recall, and a due-review queue.
 - Daily missions, XP, player levels, and local progress persistence.
-- Player progress dashboard.
 - GitHub Actions build, chess-content checks, npm security audit, and Pages deployment.
 
-This is not yet a complete chess platform. Stockfish-powered analysis, engine play, full opening coverage, a large puzzle database, game review, a saved-game library, and social/tournament features remain planned work. The current review scheduler is a transparent local heuristic driven by the learner’s recall rating; it is not a validated chess-strength score and does not sync across devices.
+This is not yet a complete chess platform. Full opening coverage, a large puzzle database, engine analysis of imported games, endgame tablebase integration, cloud accounts, and social/tournament features remain planned work. The current review scheduler is a local heuristic, not a validated chess-strength rating and not cloud-synchronized.
 
 ## Run locally
 
 Requirements: Node.js 22.12 or later and npm.
 
-```bash
-npm install
-npm run dev
-```
+1. Run npm install.
+2. Run npm run dev.
+3. Open the local URL printed by Vite.
 
-Open the local URL printed by Vite.
+The predev hook copies the pinned Stockfish worker and WebAssembly assets into the public engine directory.
 
 ## Validate
 
-```bash
-npm run build
-npm test
-npm audit --audit-level=high
-```
+Run npm run build, npm test, and npm audit --audit-level=high.
+
+The production build runs a prebuild hook that prepares the Stockfish assets before Vite bundles the app.
 
 ## Project structure
 
-```text
-src/
-  components/ChessBoard.tsx   Interactive legal chessboard
-  data/content.ts             Starter lessons, opening lines, daily missions
-  data/puzzles.ts             Curated starter tactical positions
-  lib/progress.ts             Local progress, XP, streak, level calculations
-  lib/spaced-repetition.ts    Self-rated recall intervals and due-review selection
-  App.tsx                     Application pages and experience
-  styles.css                  Responsive visual system
-```
+- src/components/ChessBoard.tsx: interactive legal chessboard
+- src/data/content.ts: starter lessons, opening lines, and daily missions
+- src/data/lesson-content.ts: lesson explanations and knowledge checks
+- src/data/puzzles.ts: curated starter tactical positions
+- src/lib/progress.ts: local progress, XP, streak, and review scheduling
+- src/lib/spaced-repetition.ts: self-rated recall intervals and due-review selection
+- src/lib/stockfish-client.ts: browser Worker UCI client
+- scripts/copy-stockfish-engine.mjs: copies pinned engine assets for dev/build
+- src/App.tsx: application pages and experience
+- src/styles.css: responsive visual system
 
 ## Product principles
 
@@ -66,10 +64,8 @@ src/
 
 ## Data and licensing
 
-- `chess.js` is used for chess rules and move validation under its BSD-2-Clause license.
-- The opening and puzzle examples currently in this repository are original, small teaching examples. Additional datasets must be reviewed for source attribution, redistribution permissions, and license compatibility before being bundled.
-- Any future Stockfish integration must comply with Stockfish's GPLv3 distribution requirements.
+- chess.js is used for chess rules and move validation under BSD-2-Clause.
+- The Stockfish 18 Lite Single browser engine is distributed separately under GPL-3.0. See docs/ENGINE-LICENSES.md and the notice copied alongside the engine assets.
+- Additional puzzle/opening datasets must be reviewed for attribution, redistribution permissions, and license compatibility before bundling.
 
-## Roadmap
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/CURRICULUM.md`](docs/CURRICULUM.md) for the planned product architecture and learning scope.
+See docs/ROADMAP.md and docs/CURRICULUM.md for the planned product architecture and learning scope.

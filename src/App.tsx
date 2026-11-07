@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, Crown, Flame, Gamepad2, GraduationCap, Lightbulb, Menu, RotateCcw, Sparkles, Target, Trophy, Undo2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Activity, BookOpen, Brain, CalendarDays, Check, ChevronRight, Cpu, Crown, Flame, Gamepad2, GraduationCap, Lightbulb, Menu, RotateCcw, Sparkles, Target, Trophy, Undo2, X } from 'lucide-react';
 import { Chess } from 'chess.js';
 import ChessBoard from './components/ChessBoard';
 import { dailyMissions, modules, openings, type Module } from './data/content';
@@ -7,6 +7,7 @@ import { puzzles } from './data/puzzles';
 import { lessonContent } from './data/lesson-content';
 import { playerLevel, readProgress, writeProgress, recordLessonComplete, recordLessonReview, recordPuzzleSolve, recordPracticeMove, getDueReviewCards, type ProgressState } from './lib/progress';
 import type { ReviewGrade } from './lib/spaced-repetition';
+import { StockfishClient, type EngineInfo } from './lib/stockfish-client';
 
 type Tab = 'home'|'learn'|'puzzles'|'openings'|'play'|'progress';
 const navigation: {id:Tab;label:string;icon:typeof Activity}[] = [
@@ -116,6 +117,22 @@ function PuzzlePage({onSolved}:{onSolved:(id:string,seconds:number)=>void}){
 
 function OpeningsPage(){const [active,setActive]=useState(0);const [ply,setPly]=useState(0);const opening=openings[active];const game=useMemo(()=>{const g=new Chess();for(const san of opening.moves.slice(0,ply))g.move(san);return g;},[opening,ply]);return <><PageTitle eyebrow="OPENING LIBRARY" title="Understand the opening." subtitle="Explore a starter collection of legal move sequences. This is not yet the complete opening encyclopedia."/><div className="opening-layout"><aside className="panel opening-list"><small>STARTER COLLECTION</small>{openings.map((o,i)=><button key={o.id} className={active===i?'selected':''} onClick={()=>{setActive(i);setPly(0);}}><small>{o.eco}</small><b>{o.name}</b><span>{o.difficulty}</span></button>)}</aside><section className="panel opening-detail"><small>{opening.eco} · {opening.difficulty.toUpperCase()}</small><h2>{opening.name}</h2><p>{opening.summary}</p><div className="opening-board"><ChessBoard fen={game.fen()} onMove={()=>undefined} disabled/></div><div className="board-actions"><button className="btn secondary" disabled={!ply} onClick={()=>setPly(p=>p-1)}>Previous</button><span>{ply}/{opening.moves.length} plies</span><button className="btn secondary" disabled={ply===opening.moves.length} onClick={()=>setPly(p=>p+1)}>Next move</button><button className="btn secondary" onClick={()=>setPly(0)}>Restart</button></div><div className="move-chips">{opening.moves.map((m,i)=><button key={`${m}${i}`} className={i<ply?'played':''} onClick={()=>setPly(i+1)}>{Math.floor(i/2)+1}{i%2===0?'.':'...'} {m}</button>)}</div><h3>Ideas to understand</h3>{opening.ideas.map((idea,i)=><div className="idea" key={idea}><small>0{i+1}</small>{idea}</div>)}</section></div></>;}
 
+const ENGINE_DIFFICULTIES = {
+  casual: { label: 'Casual', movetimeMs: 250, skillLevel: 3 },
+  club: { label: 'Club', movetimeMs: 650, skillLevel: 9 },
+  challenge: { label: 'Challenge', movetimeMs: 1200, skillLevel: 15 },
+} as const;
+
+function formatEngineScore(info:EngineInfo|null):string {
+  if(!info)return 'Waiting for the first move';
+  if(info.scoreMate!==null)return 'Mate in '+Math.abs(info.scoreMate);
+  if(info.scoreCp!==null){
+    const score=info.scoreCp/100;
+    return (score>0?'+':'')+score.toFixed(2);
+  }
+  return info.depth!==null?'Searching · depth '+info.depth:'Analyzing position';
+}
+
 function PlayPage({onMove}:{onMove:()=>void}){
   const [startFen,setStartFen]=useState(()=>new Chess().fen());
   const [fens,setFens]=useState([startFen]);
@@ -125,28 +142,121 @@ function PlayPage({onMove}:{onMove:()=>void}){
   const [pgnText,setPgnText]=useState('');
   const [importError,setImportError]=useState('');
   const [importMessage,setImportMessage]=useState('');
+  const [mode,setMode]=useState<'local'|'engine'>('local');
+  const [humanColor,setHumanColor]=useState<'w'|'b'>('w');
+  const [difficulty,setDifficulty]=useState<keyof typeof ENGINE_DIFFICULTIES>('club');
+  const [engineReady,setEngineReady]=useState(false);
+  const [engineStatus,setEngineStatus]=useState('Off');
+  const [engineError,setEngineError]=useState('');
+  const [engineInfo,setEngineInfo]=useState<EngineInfo|null>(null);
+  const engineRef=useRef<StockfishClient|null>(null);
   const fen=fens[fens.length-1];
   const game=useMemo(()=>new Chess(fen),[fen]);
+  const gameOver=game.isGameOver();
+  const isEngineTurn=mode==='engine'&&game.turn()!==humanColor;
   const turn=game.turn()==='w'?'White':'Black';
-  const status=game.isCheckmate()?('Checkmate — '+(game.turn()==='w'?'Black':'White')+' wins.'):game.isDraw()?'Draw — game ended.':turn+' to move'+(game.isCheck()?' · Check':'');
+  const status=gameOver
+    ?('Checkmate — '+(game.turn()==='w'?'Black':'White')+' wins.')
+    :game.isDraw()?'Draw — game ended.'
+    :mode==='engine'&&isEngineTurn
+      ?(engineReady?'Stockfish is thinking…':'Loading Stockfish…')
+      :turn+' to move'+(game.isCheck()?' · Check':'');
+
+  useEffect(()=>{
+    if(mode!=='engine'){
+      const active=engineRef.current;
+      engineRef.current=null;
+      active?.dispose();
+      setEngineReady(false);
+      setEngineStatus('Off');
+      setEngineError('');
+      setEngineInfo(null);
+      return;
+    }
+
+    const client=new StockfishClient({onInfo:setEngineInfo,onStatus:setEngineStatus});
+    engineRef.current=client;
+    setEngineReady(false);
+    setEngineError('');
+    setEngineStatus('Loading Stockfish 18…');
+    client.initialize().then(()=>{
+      if(engineRef.current!==client)return;
+      setEngineReady(true);
+      setEngineStatus('Ready');
+    }).catch(error=>{
+      if(engineRef.current!==client)return;
+      setEngineReady(false);
+      setEngineStatus('Unavailable');
+      setEngineError(error instanceof Error?error.message:'Stockfish could not be started.');
+    });
+    return ()=>{
+      if(engineRef.current===client)engineRef.current=null;
+      client.dispose();
+    };
+  },[mode]);
+
+  useEffect(()=>{
+    if(mode!=='engine'||!engineReady||!isEngineTurn||gameOver)return;
+    const client=engineRef.current;
+    if(!client)return;
+    let cancelled=false;
+    const settings=ENGINE_DIFFICULTIES[difficulty];
+    setEngineInfo(null);
+    setEngineStatus('Thinking…');
+    setEngineError('');
+
+    client.findBestMove(fen,settings.movetimeMs,settings.skillLevel).then(uci=>{
+      if(cancelled)return;
+      if(!uci){
+        setEngineStatus('Ready');
+        return;
+      }
+      const next=new Chess(fen);
+      const move=next.move({
+        from:uci.slice(0,2) as never,
+        to:uci.slice(2,4) as never,
+        promotion:(uci[4]??'q') as never,
+      });
+      if(!move)throw new Error('Stockfish returned a move that the chess rules rejected.');
+      setFens(current=>[...current,next.fen()]);
+      setSans(current=>[...current,move.san]);
+      setEngineStatus('Ready');
+    }).catch(error=>{
+      if(cancelled)return;
+      setEngineStatus('Unavailable');
+      setEngineError(error instanceof Error?error.message:'The engine search failed.');
+    });
+
+    return ()=>{
+      cancelled=true;
+      client.stop();
+    };
+  },[mode,engineReady,isEngineTurn,gameOver,fen,difficulty]);
 
   function move(from:string,to:string,promotion?:string){
+    if(mode==='engine'&&game.turn()!==humanColor)return;
     const next=new Chess(fen);
     try{
       const m=next.move({from:from as never,to:to as never,promotion:(promotion??'q') as never});
-      setFens(f=>[...f,next.fen()]);
-      setSans(s=>[...s,m.san]);
+      setFens(current=>[...current,next.fen()]);
+      setSans(current=>[...current,m.san]);
       setImportMessage('');
+      setEngineError('');
+      setEngineInfo(null);
       onMove();
     }catch{/* ChessBoard only emits legal destinations. */}
   }
+
   function undo(){
-    if(fens.length>1){
-      setFens(f=>f.slice(0,-1));
-      setSans(s=>s.slice(0,-1));
-      setImportMessage('');
-    }
+    const steps=mode==='engine'?2:1;
+    if(fens.length<=steps)return;
+    setFens(current=>current.slice(0,-steps));
+    setSans(current=>current.slice(0,-steps));
+    setImportMessage('');
+    setEngineInfo(null);
+    setEngineError('');
   }
+
   function reset(){
     const initialFen=new Chess().fen();
     setStartFen(initialFen);
@@ -155,7 +265,16 @@ function PlayPage({onMove}:{onMove:()=>void}){
     setImportError('');
     setImportMessage('');
     setPgnText('');
+    setEngineInfo(null);
+    setEngineError('');
   }
+
+  function changeHumanColor(color:'w'|'b'){
+    setHumanColor(color);
+    setOrientation(color);
+    reset();
+  }
+
   function exportPgn(){
     if(!sans.length)return;
     try{
@@ -174,14 +293,15 @@ function PlayPage({onMove}:{onMove:()=>void}){
       setImportError('This game could not be exported. Reset the board and try again.');
     }
   }
+
   function importPgn(){
     setImportError('');
     setImportMessage('');
     try{
       const imported=new Chess();
       imported.loadPgn(pgnText,{strict:true});
-      const fenLine = pgnText.replaceAll(String.fromCharCode(13), '').split(String.fromCharCode(10)).find(line => line.startsWith('[FEN "'));
-      const importedStartFen = fenLine ? fenLine.substring(6, fenLine.length - 2) : new Chess().fen();
+      const fenLine=pgnText.replaceAll(String.fromCharCode(13),'').split(String.fromCharCode(10)).find(line=>line.startsWith('[FEN "'));
+      const importedStartFen=fenLine?fenLine.substring(6,fenLine.length-2):new Chess().fen();
       const moves=imported.history();
       const replay=new Chess(importedStartFen);
       const replayFens=[replay.fen()];
@@ -189,6 +309,7 @@ function PlayPage({onMove}:{onMove:()=>void}){
         replay.move(san);
         replayFens.push(replay.fen());
       }
+      setMode('local');
       setStartFen(importedStartFen);
       setFens(replayFens);
       setSans(moves);
@@ -201,25 +322,48 @@ function PlayPage({onMove}:{onMove:()=>void}){
     }
   }
 
+  const canUndo=mode==='engine'?fens.length>=3:fens.length>1;
+  const boardDisabled=gameOver||(mode==='engine'&&(!engineReady||isEngineTurn));
+  const evaluation=formatEngineScore(engineInfo);
+
   return <>
-    <PageTitle eyebrow="PRACTICE BOARD" title="Play with purpose." subtitle="Practice legal moves, review the move sequence, and move games between ChessForge and other chess tools using PGN."/>
+    <PageTitle eyebrow="PRACTICE BOARD" title="Play with purpose." subtitle="Practice legal chess locally, challenge Stockfish, review your move sequence, and move games with PGN."/>
+    <section className="panel engine-control">
+      <div className="engine-control-heading">
+        <div><small>CHOOSE YOUR OPPONENT</small><b>How do you want to practice?</b></div>
+        <div className="engine-mode-tabs">
+          <button className={mode==='local'?'selected':''} onClick={()=>setMode('local')}>Two players</button>
+          <button className={mode==='engine'?'selected':''} onClick={()=>setMode('engine')}><Cpu/> Play Stockfish</button>
+        </div>
+      </div>
+      {mode==='engine'&&<>
+        <div className="engine-settings">
+          <label><span>Play as</span><select value={humanColor} onChange={event=>changeHumanColor(event.target.value as 'w'|'b')}><option value="w">White</option><option value="b">Black</option></select></label>
+          <label><span>Engine level</span><select value={difficulty} onChange={event=>setDifficulty(event.target.value as keyof typeof ENGINE_DIFFICULTIES)}><option value="casual">Casual · quick replies</option><option value="club">Club · balanced</option><option value="challenge">Challenge · longer thinking</option></select></label>
+          <div className={'engine-status '+(engineReady?'ready':'loading')}><i/>{engineStatus}</div>
+        </div>
+        {engineError&&<p className="engine-error">{engineError} You can switch back to two-player practice.</p>}
+        {engineInfo&&<div className="engine-evaluation"><div><small>ENGINE EVALUATION</small><b>{evaluation}</b></div><span>Depth {engineInfo.depth??'—'}</span><span>{engineInfo.nodes?engineInfo.nodes.toLocaleString()+' nodes':''}</span></div>}
+        <p className="engine-footnote">Stockfish 18 Lite runs locally in a browser worker. The first load downloads approximately 7.3 MB. Engine code is separately licensed under GPL-3.0.</p>
+      </>}
+    </section>
     <div className="two-column">
       <section className="panel play-panel">
         <header><b>{status}</b><button className="text-link" onClick={()=>setOrientation(o=>o==='w'?'b':'w')}>Flip board <RotateCcw/></button></header>
-        <div className="training-board"><ChessBoard fen={fen} onMove={move} orientation={orientation} disabled={game.isGameOver()}/></div>
+        <div className="training-board"><ChessBoard fen={fen} onMove={move} orientation={orientation} disabled={boardDisabled}/></div>
         <div className="board-actions">
-          <button className="btn secondary" onClick={undo} disabled={fens.length===1}><Undo2/> Undo</button>
+          <button className="btn secondary" onClick={undo} disabled={!canUndo||isEngineTurn}><Undo2/> Undo {mode==='engine'?'turn':'move'}</button>
           <button className="btn secondary" onClick={reset}><RotateCcw/> New game</button>
           <span>{sans.length} plies</span>
         </div>
         <div className="pgn-actions">
           <button className="btn secondary" onClick={exportPgn} disabled={!sans.length}>Export PGN</button>
-          <button className="btn secondary" onClick={()=>{setImportOpen(v=>!v);setImportError('');}}>Import PGN</button>
+          <button className="btn secondary" onClick={()=>{setImportOpen(v=>!v);setImportError('');}} disabled={mode==='engine'}>Import PGN</button>
         </div>
         {importMessage&&<p className="pgn-message">{importMessage}</p>}
         {importOpen&&<div className="pgn-import-panel">
           <label className="pgn-label">PASTE A PGN GAME
-            <textarea className="pgn-textarea" value={pgnText} onChange={e=>setPgnText(e.target.value)} placeholder={'[Event "Casual game"]\\n\\n1. e4 e5 2. Nf3 Nc6'} rows={7}/>
+            <textarea className="pgn-textarea" value={pgnText} onChange={e=>setPgnText(e.target.value)} placeholder={'[Event "Casual game"]\n\n1. e4 e5 2. Nf3 Nc6'} rows={7}/>
           </label>
           <p className="pgn-help">Strict standard algebraic notation is checked before the board is replaced. PGNs with a FEN starting-position header are supported.</p>
           {importError&&<p className="pgn-error">{importError}</p>}
@@ -237,6 +381,7 @@ function PlayPage({onMove}:{onMove:()=>void}){
     </div>
   </>;
 }
+
 
 function ProgressPage({progress,level,navigate}:{progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void}){const percent=Math.max(0,Math.min(100,(progress.xp-level.current)/(level.next-level.current)*100));const skills=[['Foundations','Board vision and piece safety',progress.completedLessons.includes('board-vision')?1:0,1],['Tactical vision','Patterns and forcing moves',progress.solvedPuzzles.length,5],['Calculation','Candidate moves and variations',progress.completedLessons.includes('forcing-moves')?1:0,4],['Strategy','Plans and pawn structures',progress.completedLessons.filter(id=>['pawn-structures','prophylaxis'].includes(id)).length,5],['Endgames','Technical and practical endings',progress.completedLessons.includes('rook-endgames')?1:0,5]] as const;return <><PageTitle eyebrow="YOUR PLAYER PROFILE" title="Progress you can build on." subtitle="Track what you've completed and which areas of chess you've explored."/><div className="rank-card panel"><Crown/><div><small>YOUR CURRENT RANK</small><h2>Level {level.level} · {level.title}</h2><p>{progress.xp.toLocaleString()} XP earned</p></div><strong>{String(level.level).padStart(2,'0')}</strong><div className="rank-progress"><span>{level.next-progress.xp} XP to next level</span><i><b style={{width:`${percent}%`}}/></i></div></div><div className="stats"><Stat label="CURRENT STREAK" value={String(progress.streak)} detail="active days" icon={<Flame/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length)} detail={`of ${modules.length}`} icon={<GraduationCap/>}/><Stat label="POSITIONS SOLVED" value={String(progress.solvedPuzzles.length)} detail="unique puzzles" icon={<Target/>}/><Stat label="MOVES PRACTICED" value={String(progress.playedMoves)} detail="legal moves" icon={<Gamepad2/>}/></div><section className="section"><header><div><small>SKILL DEVELOPMENT</small><h2>Your chess profile</h2></div><span className="pill">EARLY ACCESS</span></header><div className="skill-list panel">{skills.map(s=><div className="skill-row" key={s[0]}><div><b>{s[0]}</b><span>{s[1]}</span></div><i><b style={{width:`${Math.min(100,s[2]/s[3]*100)}%`}}/></i><strong>{s[2]}/{s[3]}</strong></div>)}</div></section><div className="next-step"><div><small>KEEP BUILDING</small><h3>Your next best step</h3><p>Continue through the academy and return to the tactics lab.</p></div><button className="btn primary" onClick={()=>navigate('learn')}>Continue learning <ChevronRight/></button></div></>;}
 
