@@ -26,18 +26,18 @@ export function parseUciInfoLine(line: string): EngineInfo | null {
   const normalized = line.trim();
   if (!normalized.startsWith('info ')) return null;
 
-  const depthMatch = normalized.match(/(?:^|\\s)depth\\s+(\\d+)/);
-  const cpMatch = normalized.match(/(?:^|\\s)score\\s+cp\\s+(-?\\d+)/);
-  const mateMatch = normalized.match(/(?:^|\\s)score\\s+mate\\s+(-?\\d+)/);
-  const nodesMatch = normalized.match(/(?:^|\\s)nodes\\s+(\\d+)/);
-  const pvMatch = normalized.match(/(?:^|\\s)pv\\s+(.+)$/);
+  const depthMatch = normalized.match(/(?:^|\s)depth\s+(\d+)/);
+  const cpMatch = normalized.match(/(?:^|\s)score\s+cp\s+(-?\d+)/);
+  const mateMatch = normalized.match(/(?:^|\s)score\s+mate\s+(-?\d+)/);
+  const nodesMatch = normalized.match(/(?:^|\s)nodes\s+(\d+)/);
+  const pvMatch = normalized.match(/(?:^|\s)pv\s+(.+)$/);
 
   const info: EngineInfo = {
     depth: depthMatch ? Number(depthMatch[1]) : null,
     scoreCp: cpMatch ? Number(cpMatch[1]) : null,
     scoreMate: mateMatch ? Number(mateMatch[1]) : null,
     nodes: nodesMatch ? Number(nodesMatch[1]) : null,
-    principalVariation: pvMatch ? pvMatch[1].trim().split(/\\s+/) : [],
+    principalVariation: pvMatch ? pvMatch[1].trim().split(/\s+/) : [],
   };
 
   if (info.depth === null && info.scoreCp === null && info.scoreMate === null && info.nodes === null && info.principalVariation.length === 0) {
@@ -47,7 +47,7 @@ export function parseUciInfoLine(line: string): EngineInfo | null {
 }
 
 export function parseUciBestMoveLine(line: string): string | null {
-  const match = line.trim().match(/^bestmove\\s+([a-h][1-8][a-h][1-8][qrbn]?)(?:\\s|$)/);
+  const match = line.trim().match(/^bestmove\s+([a-h][1-8][a-h][1-8][qrbn]?)(?:\s|$)/);
   return match ? match[1] : null;
 }
 
