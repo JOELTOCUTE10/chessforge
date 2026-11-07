@@ -7,6 +7,7 @@ export type ProgressState = {
   completedLessons: string[];
   completedMissions: string[];
   solvedPuzzles: string[];
+  dailySolvedPuzzles: string[];
   bestPuzzleSeconds: number | null;
   playedMoves: number;
   streak: number;
@@ -22,6 +23,7 @@ const initial: ProgressState = {
   completedLessons: [],
   completedMissions: [],
   solvedPuzzles: [],
+  dailySolvedPuzzles: [],
   bestPuzzleSeconds: null,
   playedMoves: 0,
   streak: 0,
@@ -32,19 +34,50 @@ const initial: ProgressState = {
   dailyMoveCount: 0,
 };
 
+export function todayKey(date = new Date()): string {
+  return String(date.getFullYear()) + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
+export function resetDailyProgress(progress: ProgressState, date = new Date()): ProgressState {
+  const today = todayKey(date);
+  if (progress.missionDate === today) return progress;
+  return {
+    ...progress,
+    completedMissions: [],
+    missionDate: today,
+    dailyPuzzleCount: 0,
+    dailyLessonCount: 0,
+    dailyMoveCount: 0,
+    dailySolvedPuzzles: [],
+  };
+}
+
+export function markActiveDay(progress: ProgressState, date = new Date()): ProgressState {
+  const today = todayKey(date);
+  if (progress.lastActiveDate === today) return progress;
+  const yesterday = new Date(date);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const streak = progress.lastActiveDate === todayKey(yesterday) ? progress.streak + 1 : 1;
+  return { ...progress, streak, lastActiveDate: today };
+}
+
 export function readProgress(): ProgressState {
-  if (typeof window === 'undefined') return initial;
+  if (typeof window === 'undefined') return resetDailyProgress(initial);
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initial;
+    if (!raw) return resetDailyProgress(initial);
     const parsed = JSON.parse(raw) as Partial<ProgressState>;
-    const merged = { ...initial, ...parsed };
-    if (merged.missionDate !== todayKey()) {
-      return { ...merged, completedMissions: [], missionDate: todayKey(), dailyPuzzleCount: 0, dailyLessonCount: 0, dailyMoveCount: 0 };
-    }
-    return merged;
+    const merged: ProgressState = {
+      ...initial,
+      ...parsed,
+      completedLessons: Array.isArray(parsed.completedLessons) ? parsed.completedLessons : [],
+      completedMissions: Array.isArray(parsed.completedMissions) ? parsed.completedMissions : [],
+      solvedPuzzles: Array.isArray(parsed.solvedPuzzles) ? parsed.solvedPuzzles : [],
+      dailySolvedPuzzles: Array.isArray(parsed.dailySolvedPuzzles) ? parsed.dailySolvedPuzzles : [],
+    };
+    return resetDailyProgress(merged);
   } catch {
-    return initial;
+    return resetDailyProgress(initial);
   }
 }
 
@@ -57,17 +90,51 @@ export function writeProgress(progress: ProgressState): void {
   }
 }
 
-export function todayKey(date = new Date()): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+export function awardXp(progress: ProgressState, amount: number, date = new Date()): ProgressState {
+  const active = markActiveDay(progress, date);
+  return { ...active, xp: active.xp + amount };
 }
 
-export function awardXp(progress: ProgressState, amount: number): ProgressState {
-  const today = todayKey();
-  if (progress.lastActiveDate === today) return { ...progress, xp: progress.xp + amount };
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const streak = progress.lastActiveDate === todayKey(yesterday) ? progress.streak + 1 : 1;
-  return { ...progress, xp: progress.xp + amount, streak, lastActiveDate: today };
+function awardMission(progress: ProgressState, id: string, reward: number, date: Date): ProgressState {
+  if (progress.completedMissions.includes(id)) return progress;
+  const earned = awardXp(progress, reward, date);
+  return { ...earned, completedMissions: [...earned.completedMissions, id] };
+}
+
+export function recordLessonComplete(progress: ProgressState, lessonId: string, xp: number, date = new Date()): ProgressState {
+  let next = markActiveDay(resetDailyProgress(progress, date), date);
+  if (next.completedLessons.includes(lessonId)) return next;
+  next = {
+    ...next,
+    completedLessons: [...next.completedLessons, lessonId],
+    dailyLessonCount: next.dailyLessonCount + 1,
+  };
+  next = awardXp(next, xp, date);
+  if (next.dailyLessonCount >= 1) next = awardMission(next, 'learn', 120, date);
+  return next;
+}
+
+export function recordPuzzleSolve(progress: ProgressState, puzzleId: string, seconds: number, date = new Date()): ProgressState {
+  let next = markActiveDay(resetDailyProgress(progress, date), date);
+  const isFirstEver = !next.solvedPuzzles.includes(puzzleId);
+  const isFirstToday = !next.dailySolvedPuzzles.includes(puzzleId);
+  next = {
+    ...next,
+    solvedPuzzles: isFirstEver ? [...next.solvedPuzzles, puzzleId] : next.solvedPuzzles,
+    dailySolvedPuzzles: isFirstToday ? [...next.dailySolvedPuzzles, puzzleId] : next.dailySolvedPuzzles,
+    dailyPuzzleCount: next.dailyPuzzleCount + (isFirstToday ? 1 : 0),
+    bestPuzzleSeconds: next.bestPuzzleSeconds === null ? seconds : Math.min(next.bestPuzzleSeconds, seconds),
+  };
+  if (isFirstEver) next = awardXp(next, 80, date);
+  if (next.dailyPuzzleCount >= 2) next = awardMission(next, 'warmup', 90, date);
+  return next;
+}
+
+export function recordPracticeMove(progress: ProgressState, date = new Date()): ProgressState {
+  let next = markActiveDay(resetDailyProgress(progress, date), date);
+  next = { ...next, playedMoves: next.playedMoves + 1, dailyMoveCount: next.dailyMoveCount + 1 };
+  if (next.dailyMoveCount >= 8) next = awardMission(next, 'practice', 100, date);
+  return next;
 }
 
 export function missionProgress(mission: Mission, progress: ProgressState): number {

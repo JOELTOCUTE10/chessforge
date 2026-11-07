@@ -4,7 +4,8 @@ import { Chess } from 'chess.js';
 import ChessBoard from './components/ChessBoard';
 import { dailyMissions, modules, openings, type Module } from './data/content';
 import { puzzles } from './data/puzzles';
-import { awardXp, playerLevel, readProgress, todayKey, writeProgress, type ProgressState } from './lib/progress';
+import { lessonContent } from './data/lesson-content';
+import { playerLevel, readProgress, writeProgress, recordLessonComplete, recordPuzzleSolve, recordPracticeMove, type ProgressState } from './lib/progress';
 
 type Tab = 'home'|'learn'|'puzzles'|'openings'|'play'|'progress';
 const navigation: {id:Tab;label:string;icon:typeof Activity}[] = [
@@ -24,17 +25,22 @@ export default function App() {
   const navigate=(next:Tab)=>{setTab(next);setMobile(false);setLesson(null);setNotice('');};
   function finishLesson(item:Module){
     if(!progress.completedLessons.includes(item.id)){
-      setProgress(p=>{let n:ProgressState={...p,completedLessons:[...p.completedLessons,item.id],dailyLessonCount:p.dailyLessonCount+1,missionDate:todayKey()};n=awardXp(n,item.xp);if(!n.completedMissions.includes('learn'))n={...awardXp(n,120),completedMissions:[...n.completedMissions,'learn']};return n;});
-      setNotice(`Lesson completed. +${item.xp} XP.`);
+      setProgress(p=>recordLessonComplete(p,item.id,item.xp));
+      setNotice('Lesson completed. '+item.xp+' XP earned.');
     }
     setLesson(null);
   }
   function recordPuzzle(id:string,seconds:number){
-    const already=progress.solvedPuzzles.includes(id);
-    setProgress(p=>{let n:ProgressState={...p,solvedPuzzles:already?p.solvedPuzzles:[...p.solvedPuzzles,id],dailyPuzzleCount:p.dailyPuzzleCount+1,missionDate:todayKey(),bestPuzzleSeconds:p.bestPuzzleSeconds===null?seconds:Math.min(p.bestPuzzleSeconds,seconds)};if(!already)n=awardXp(n,80);if(n.dailyPuzzleCount>=2&&!n.completedMissions.includes('warmup'))n={...awardXp(n,90),completedMissions:[...n.completedMissions,'warmup']};return n;});
-    setNotice(already?'Correct. XP for this position was already earned.':'Puzzle solved. +80 XP.');
+    const alreadyEarned=progress.solvedPuzzles.includes(id);
+    const solvedToday=progress.dailySolvedPuzzles.includes(id);
+    setProgress(p=>recordPuzzleSolve(p,id,seconds));
+    setNotice(alreadyEarned
+      ? (solvedToday?'Correct. Try a different position to advance today’s puzzle mission.':'Correct. This position was already recorded in your lifetime progress.')
+      : 'Puzzle solved. +80 XP.');
   }
-  function recordMove(){setProgress(p=>{let n:ProgressState={...p,playedMoves:p.playedMoves+1,dailyMoveCount:p.dailyMoveCount+1,missionDate:todayKey()};if(n.dailyMoveCount>=8&&!n.completedMissions.includes('practice'))n={...awardXp(n,100),completedMissions:[...n.completedMissions,'practice']};return n;});}
+  function recordMove(){
+    setProgress(p=>recordPracticeMove(p));
+  }
   return <div className="app-shell">
     <aside className={`sidebar ${mobile?'sidebar-open':''}`}>
       <div className="brand"><span className="brand-mark"><Crown/></span><span><b>CHESSFORGE</b><small>THE CHESS ACADEMY</small></span><button className="icon mobile-close" onClick={()=>setMobile(false)} aria-label="Close menu"><X/></button></div>
@@ -96,4 +102,51 @@ function PlayPage({onMove}:{onMove:()=>void}){const [fens,setFens]=useState([new
 
 function ProgressPage({progress,level,navigate}:{progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void}){const percent=Math.max(0,Math.min(100,(progress.xp-level.current)/(level.next-level.current)*100));const skills=[['Foundations','Board vision and piece safety',progress.completedLessons.includes('board-vision')?1:0,1],['Tactical vision','Patterns and forcing moves',progress.solvedPuzzles.length,5],['Calculation','Candidate moves and variations',progress.completedLessons.includes('forcing-moves')?1:0,4],['Strategy','Plans and pawn structures',progress.completedLessons.filter(id=>['pawn-structures','prophylaxis'].includes(id)).length,5],['Endgames','Technical and practical endings',progress.completedLessons.includes('rook-endgames')?1:0,5]] as const;return <><PageTitle eyebrow="YOUR PLAYER PROFILE" title="Progress you can build on." subtitle="Track what you've completed and which areas of chess you've explored."/><div className="rank-card panel"><Crown/><div><small>YOUR CURRENT RANK</small><h2>Level {level.level} · {level.title}</h2><p>{progress.xp.toLocaleString()} XP earned</p></div><strong>{String(level.level).padStart(2,'0')}</strong><div className="rank-progress"><span>{level.next-progress.xp} XP to next level</span><i><b style={{width:`${percent}%`}}/></i></div></div><div className="stats"><Stat label="CURRENT STREAK" value={String(progress.streak)} detail="active days" icon={<Flame/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length)} detail={`of ${modules.length}`} icon={<GraduationCap/>}/><Stat label="POSITIONS SOLVED" value={String(progress.solvedPuzzles.length)} detail="unique puzzles" icon={<Target/>}/><Stat label="MOVES PRACTICED" value={String(progress.playedMoves)} detail="legal moves" icon={<Gamepad2/>}/></div><section className="section"><header><div><small>SKILL DEVELOPMENT</small><h2>Your chess profile</h2></div><span className="pill">EARLY ACCESS</span></header><div className="skill-list panel">{skills.map(s=><div className="skill-row" key={s[0]}><div><b>{s[0]}</b><span>{s[1]}</span></div><i><b style={{width:`${Math.min(100,s[2]/s[3]*100)}%`}}/></i><strong>{s[2]}/{s[3]}</strong></div>)}</div></section><div className="next-step"><div><small>KEEP BUILDING</small><h3>Your next best step</h3><p>Continue through the academy and return to the tactics lab.</p></div><button className="btn primary" onClick={()=>navigate('learn')}>Continue learning <ChevronRight/></button></div></>;}
 
-function LessonModal({module,alreadyDone,close,complete}:{module:Module;alreadyDone:boolean;close:()=>void;complete:()=>void}){const [checked,setChecked]=useState<number[]>([]);const ready=checked.length===module.lessons.length;return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}><section className="lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-title"><button className="modal-close icon" onClick={close} aria-label="Close lesson"><X/></button><div className="modal-art">♞<small>CHESSFORGE ACADEMY</small></div><div className="modal-body"><small>{module.category} · {module.level} · {module.minutes} MIN</small><h2 id="lesson-title">{module.title}</h2><p>{module.description}</p><div className="check-heading">LESSON CHECKPOINTS <b>{checked.length}/{module.lessons.length}</b></div><div className="check-list">{module.lessons.map((item,i)=><label key={item}><input type="checkbox" checked={checked.includes(i)} onChange={e=>setChecked(s=>e.target.checked?[...s,i]:s.filter(x=>x!==i))}/><span><Check/></span>{item}</label>)}</div><div className="modal-footer"><em>✦ {module.xp} XP {alreadyDone?'already earned':'on completion'}</em><button className="btn primary" disabled={!ready||alreadyDone} onClick={complete}>{alreadyDone?'Already mastered':'Complete lesson'}</button></div><p className="disclaimer">This first release records lesson checkpoints. Interactive board examples and adaptive reviews are planned next.</p></div></section></div>;}
+function LessonModal({module,alreadyDone,close,complete}:{module:Module;alreadyDone:boolean;close:()=>void;complete:()=>void}){
+  const [checked,setChecked]=useState<number[]>([]);
+  const [answer,setAnswer]=useState<number|null>(null);
+  const [submitted,setSubmitted]=useState(false);
+  const content=lessonContent[module.id];
+  const correct=answer===content.knowledgeCheck.answerIndex;
+  const ready=checked.length===module.lessons.length&&correct&&submitted;
+  return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
+    <section className="lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-title">
+      <button className="modal-close icon" onClick={close} aria-label="Close lesson"><X/></button>
+      <div className="modal-art">♞<small>CHESSFORGE ACADEMY · GUIDED LESSON</small></div>
+      <div className="modal-body">
+        <small>{module.category} · {module.level} · {module.minutes} MIN</small>
+        <h2 id="lesson-title">{module.title}</h2>
+        <p>{module.description}</p>
+        <div className="check-heading">LEARNING SECTIONS <b>{checked.length}/{module.lessons.length} REVIEWED</b></div>
+        <div className="lesson-sections">
+          {module.lessons.map((item,i)=><article className="lesson-section" key={item}>
+            <div className="lesson-section-heading"><small>CONCEPT 0{i+1}</small><h3>{item}</h3></div>
+            <p>{content.explanations[i]}</p>
+            <label className="lesson-read-check">
+              <input type="checkbox" checked={checked.includes(i)} onChange={e=>setChecked(s=>e.target.checked?[...s,i]:s.filter(x=>x!==i))}/>
+              <span>{checked.includes(i)?'Reviewed':'Mark this section reviewed'}</span>
+            </label>
+          </article>)}
+        </div>
+        <section className="lesson-quiz">
+          <small>KNOWLEDGE CHECK</small>
+          <h3>{content.knowledgeCheck.question}</h3>
+          <div className="lesson-options">
+            {content.knowledgeCheck.options.map((option,i)=><button type="button" key={option} className={'lesson-option '+(answer===i?'selected':'')} aria-pressed={answer===i} onClick={()=>{setAnswer(i);setSubmitted(false);}}>
+              <span>{String.fromCharCode(65+i)}</span>{option}
+            </button>)}
+          </div>
+          <div className="lesson-quiz-actions">
+            <button className="btn secondary" disabled={answer===null} onClick={()=>setSubmitted(true)}>Check answer</button>
+            {submitted&&<p className={correct?'lesson-feedback correct':'lesson-feedback'}>{correct?'Correct. ': 'Not quite. '} {content.knowledgeCheck.explanation}</p>}
+          </div>
+        </section>
+        <div className="modal-footer">
+          <em>✦ {module.xp} XP {alreadyDone?'already earned':'on completion'}</em>
+          <button className="btn primary" disabled={!ready||alreadyDone} onClick={complete}>{alreadyDone?'Already mastered':ready?'Complete lesson':'Review all sections and pass the check'}</button>
+        </div>
+        <p className="disclaimer">Lesson completion now requires reading all four sections and answering the knowledge check correctly. Your progress is stored in this browser.</p>
+      </div>
+    </section>
+  </div>;
+}
