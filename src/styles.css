@@ -4,3 +4,38 @@
 @media(max-width:850px){.sidebar{width:255px;transform:translateX(-100%);transition:transform .2s;box-shadow:15px 0 45px #0007}.sidebar.sidebar-open{transform:translateX(0)}.mobile-menu,.mobile-close{display:grid}.mobile-close{margin-left:auto}.scrim{display:block;position:fixed;z-index:19;inset:0;border:0;background:#0009}.main{margin:0}.topbar{padding:0 17px}.page-content{padding:23px 18px}.footer{padding:15px 18px}.puzzle-layout,.two-column{grid-template-columns:1fr}.opening-layout{grid-template-columns:1fr}.opening-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}.opening-list>small{grid-column:1/-1}.opening-list button{min-width:0}}
 @media(max-width:620px){.topbar{height:60px;padding:0 10px;gap:7px}.crumb{font-size:7px;gap:4px}.top-actions{gap:4px}.streak,.xp{padding:6px;font-size:7px;gap:3px}.avatar{width:27px;height:27px}.page-content{padding:19px 12px 25px}.footer{padding:13px 12px 17px;font-size:6px;gap:8px}.footer span+span{text-align:right;font-size:8px}.hero{min-height:325px;padding:25px 17px 50px}.hero h1{font-size:39px}.hero-copy p{max-width:285px;font-size:10px}.hero-copy>div:last-child{gap:6px;margin-top:15px}.btn{min-height:34px;padding:0 9px;font-size:8px}.hero-piece{top:auto;bottom:18px;right:0;width:38%;height:125px;opacity:.35;font-size:105px}.hero-piece:before{width:145px}.hero-piece:after{width:108px}.hero-piece small{bottom:0;font-size:6px}.hero footer{height:30px;padding:0 9px;font-size:6px}.welcome{align-items:flex-start;flex-direction:column;gap:8px;margin:22px 0 13px}.welcome h2,.section header h2{font-size:18px}.welcome p{font-size:9px}.welcome>span{font-size:8px}.stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.stat-card{min-height:102px;padding:9px}.stat-card>b{font-size:20px}.stat-card>small{font-size:7px}.stat-card>em{font-size:8px}.section{margin-top:24px}.section header{gap:6px}.text-link{font-size:8px}.missions{grid-template-columns:1fr;gap:7px}.mission{min-height:125px;padding:11px}.mission>strong{margin-top:8px}.mission>p{font-size:8px}.continue{gap:9px;padding:9px}.continue>span{width:49px;height:52px;flex:0 0 49px;font-size:38px}.continue h3{font-size:12px}.continue p{font-size:8px}.continue em{font-size:7px}.continue>button{width:29px;height:29px}.courses{grid-template-columns:1fr;gap:8px}.courses .course-art{height:100px}.courses .course-art>strong{font-size:59px}.home-courses{grid-template-columns:repeat(2,minmax(0,1fr))}.home-courses .course-info{padding:8px}.home-courses .course-info h3{font-size:9px}.home-courses .course-info p{font-size:7px}.home-courses .course-info>small,.home-courses .course-info footer{font-size:6px}.page-title{margin:1px 0 17px}.page-title h1{font-size:27px}.page-title p{font-size:9px}.learning-callout{padding:10px;gap:8px}.learning-callout p,.info-note p{font-size:8px}.learning-callout>strong{font-size:15px}.filters{gap:4px;margin:14px 0 10px}.filters buttons{padding:6px 8px;font-size:8px}.training-panel,.play-panel,.opening-detail{padding:10px}.training-board,.opening-board{margin:12px auto}.piece{font-size:clamp(22px,8vw,40px)}.rank-label,.file-label{font-size:6px}.board-actions{gap:5px}.board-actions .btn{padding:0 7px}.feedback{font-size:8px}.opening-list{padding:9px;gap:2px}.opening-list button{padding:7px 5px}.opening-list button b{font-size:8px}.opening-list button small,.opening-list button span{font-size:7px}.opening-detail{padding:10px}.opening-detail h2{font-size:19px}.rank-card{grid-template-columns:34px 1fr auto;padding:11px;gap:8px}.rank-card>svg{width:23px}.rank-card h2{font-size:13px}.rank-card>strong{font-size:25px}.rank-card p{font-size:8px}.skill-list{padding:3px 10px}.skill-row{grid-template-columns:1fr 25% 30px;gap:7px;padding:10px 0}.skill-row>div b{font-size:8px}.skill-row>div span{font-size:7px}.skill-row>strong{font-size:7px}.next-step{align-items:flex-start;flex-direction:column;padding:12px}.next-step p{font-size:8px}.modal-backdrop{padding:8px}.modal-body{padding:13px}.modal-body h2{font-size:18px}.modal-footer{align-items:flex-start;flex-direction:column}.modal-footer .btn{width:100%}.notice{padding:8px 12px;font-size:8px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* Scheduled review queue and multi-question lesson assessment */
+.review-section{margin-top:20px}
+.review-grid{display:grid;gap:8px}
+.review-card{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:1px solid #3a4b3d;border-radius:9px;background:linear-gradient(110deg,#1e2b22,#19231c);color:#e5ede2;text-align:left}
+.review-card:hover{border-color:#819b7c;background:#223127}
+.review-icon{width:34px;height:34px;display:grid;place-items:center;flex:0 0 34px;border-radius:8px;background:#d5bc8418;color:#d9c18b}
+.review-icon svg{width:17px}
+.review-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:4px}
+.review-copy b{font-size:10px}
+.review-copy small{color:#9aa898;font-size:8px}
+.review-action{display:flex;align-items:center;gap:3px;color:#d9c18b;font-size:9px}
+.review-action svg{width:13px}
+.review-note{margin:8px 0 0;color:#91a092;font-size:9px;line-height:1.5}
+.lesson-question{margin-top:12px;padding:11px;border:1px solid var(--line);border-radius:8px;background:#141d17}
+.lesson-question-heading{display:grid;gap:6px;margin-bottom:9px}
+.lesson-question-heading small,.recall-rating>small{color:#d2b982;font:8px 'DM Mono';letter-spacing:.1em}
+.lesson-question-heading b{color:#e1e9de;font-size:10px;line-height:1.5}
+.lesson-options{display:grid;gap:6px}
+.lesson-option{display:flex;align-items:center;gap:8px;width:100%;padding:8px;border:1px solid #354237;border-radius:7px;background:#1b271f;color:#b9c6b6;text-align:left;font-size:9px;line-height:1.45}
+.lesson-option>span{display:grid;place-items:center;width:20px;height:20px;flex:0 0 20px;border:1px solid #596b57;border-radius:5px;color:#d4c08d;font:8px 'DM Mono'}
+.lesson-option.selected{border-color:#c5aa70;background:#c5aa7015;color:#e5eadd}
+.lesson-option.correct{border-color:#6da97a;background:#6da97a18;color:#b9d8bf}
+.lesson-option.incorrect{border-color:#b77969;background:#b7796915;color:#e4b3a9}
+.lesson-option:disabled{cursor:default}
+.lesson-quiz-actions{display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap;margin-top:8px}
+.lesson-feedback{margin:3px 0 0;color:#d7a99e;font-size:9px;line-height:1.5}
+.lesson-feedback.correct{color:#acd0b1}
+.recall-rating{margin-top:14px;padding:12px;border:1px solid #5c563e;border-radius:8px;background:#d4bd8410}
+.recall-rating h3{margin:7px 0 4px;color:#e6eadd;font:700 12px Manrope}
+.recall-rating p{margin:0;color:#a3ae9e;font-size:9px;line-height:1.5}
+.rating-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:10px}
+.rating-button{min-height:34px;padding:6px;border:1px solid #495342;border-radius:6px;background:#1c2820;color:#b7c2b1;font-size:8px}
+.rating-button.selected{border-color:#d5bd85;background:#d5bd8520;color:#f0d89e}
+@media(max-width:620px){.rating-options{grid-template-columns:repeat(2,minmax(0,1fr))}.review-card{gap:8px;padding:9px}.review-copy b{font-size:9px}.review-action{font-size:8px}}

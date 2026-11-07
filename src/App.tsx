@@ -5,7 +5,8 @@ import ChessBoard from './components/ChessBoard';
 import { dailyMissions, modules, openings, type Module } from './data/content';
 import { puzzles } from './data/puzzles';
 import { lessonContent } from './data/lesson-content';
-import { playerLevel, readProgress, writeProgress, recordLessonComplete, recordPuzzleSolve, recordPracticeMove, type ProgressState } from './lib/progress';
+import { playerLevel, readProgress, writeProgress, recordLessonComplete, recordLessonReview, recordPuzzleSolve, recordPracticeMove, getDueReviewCards, type ProgressState } from './lib/progress';
+import type { ReviewGrade } from './lib/spaced-repetition';
 
 type Tab = 'home'|'learn'|'puzzles'|'openings'|'play'|'progress';
 const navigation: {id:Tab;label:string;icon:typeof Activity}[] = [
@@ -23,11 +24,14 @@ export default function App() {
   const level=playerLevel(progress.xp);
   useEffect(()=>writeProgress(progress),[progress]);
   const navigate=(next:Tab)=>{setTab(next);setMobile(false);setLesson(null);setNotice('');};
-  function finishLesson(item:Module){
-    if(!progress.completedLessons.includes(item.id)){
-      setProgress(p=>recordLessonComplete(p,item.id,item.xp));
-      setNotice('Lesson completed. '+item.xp+' XP earned.');
-    }
+  function finishLesson(item:Module,grade:ReviewGrade){
+    const alreadyDone=progress.completedLessons.includes(item.id);
+    setProgress(p=>alreadyDone
+      ? recordLessonReview(p,item.id,grade)
+      : recordLessonComplete(p,item.id,item.xp,new Date(),grade));
+    setNotice(alreadyDone
+      ? 'Review saved. Your next review has been scheduled.'
+      : 'Lesson completed. '+item.xp+' XP earned.');
     setLesson(null);
   }
   function recordPuzzle(id:string,seconds:number){
@@ -61,13 +65,30 @@ export default function App() {
       </div>
       <footer className="footer"><span>CHESSFORGE · BUILD YOUR CHESS MIND</span><span>Practice with purpose. Improve with proof.</span></footer>
     </main>
-    {lesson&&<LessonModal module={lesson} alreadyDone={progress.completedLessons.includes(lesson.id)} close={()=>setLesson(null)} complete={()=>finishLesson(lesson)}/>}
+    {lesson&&<LessonModal module={lesson} alreadyDone={progress.completedLessons.includes(lesson.id)} close={()=>setLesson(null)} complete={(grade)=>finishLesson(lesson,grade)}/>}
   </div>;
 }
 
 function PageTitle({eyebrow,title,subtitle}:{eyebrow:string;title:string;subtitle:string}){return <div className="page-title"><small>{eyebrow}</small><h1>{title}</h1><p>{subtitle}</p></div>;}
 function Stat({label,value,detail,icon}:{label:string;value:string;detail:string;icon:ReactNode}){return <div className="stat-card"><span>{icon}</span><small>{label}</small><b>{value}</b><em>{detail}</em></div>;}
 function CourseCard({item,index,done,onClick}:{item:Module;index:number;done:boolean;onClick:()=>void}){return <button className="course-card" onClick={onClick}><div className={`course-art tone-${index%4}`}><small>0{index+1} · {item.category}</small><strong>{['♙','♘','♗','♖','♕','♔'][index%6]}</strong>{done&&<i><Check/> MASTERED</i>}</div><div className="course-info"><small>{item.level} · {item.minutes} MIN</small><h3>{item.title}</h3><p>{item.subtitle}</p><footer>✦ {item.xp} XP <span>Explore <ChevronRight/></span></footer></div></button>;}
+
+function DueReviewPanel({progress,openLesson}:{progress:ProgressState;openLesson:(m:Module)=>void}) {
+  const due=getDueReviewCards(progress);
+  const items=due.map(card=>({card,module:modules.find(item=>item.id===card.lessonId)})).filter((item):item is {card:typeof due[number];module:Module}=>Boolean(item.module));
+  if(!items.length) return null;
+  return <section className="section review-section">
+    <header><div><small>SPACED RETRIEVAL</small><h2>Ready for a quick review?</h2></div><span className="pill">{items.length} DUE</span></header>
+    <div className="review-grid">
+      {items.slice(0,3).map(({card,module})=><button className="review-card" key={module.id} onClick={()=>openLesson(module)}>
+        <span className="review-icon"><Brain/></span>
+        <span className="review-copy"><b>{module.title}</b><small>{card.intervalDays===1?'Short recall interval':'Last interval: '+card.intervalDays+' days'} · {card.lapses} retries</small></span>
+        <span className="review-action">Review <ChevronRight/></span>
+      </button>)}
+    </div>
+    <p className="review-note">Recall the idea before reopening the explanation. Your rating after the questions sets the next review interval.</p>
+  </section>;
+}
 
 type HomeProps={progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void;openLesson:(m:Module)=>void};
 function HomePage({progress,level,navigate,openLesson}:HomeProps){
@@ -76,13 +97,14 @@ function HomePage({progress,level,navigate,openLesson}:HomeProps){
     <section className="hero"><div className="hero-copy"><small>YOUR NEXT MOVE STARTS HERE</small><h1>Think deeper.<br/><i>Play stronger.</i></h1><p>A smarter way to master chess. Build your skills one idea, one position, and one good decision at a time.</p><div><button className="btn primary" onClick={()=>openLesson(featured)}>Continue learning <ChevronRight/></button><button className="btn subtle" onClick={()=>navigate('puzzles')}><Target/> Jump into tactics</button></div></div><div className="hero-piece">♛<small>E4 · D5 · C6</small></div><footer><span>● YOUR PERSONAL CHESS ACADEMY</span><span>01 / DAILY TRAINING</span></footer></section>
     <section className="welcome"><div><small>YOUR DEVELOPMENT</small><h2>Welcome back, Scholar.</h2><p>Small, focused sessions add up to stronger chess.</p></div><span><CalendarDays/> {new Date().toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</span></section>
     <div className="stats"><Stat label="ACADEMY LEVEL" value={String(level.level).padStart(2,'0')} detail={level.title} icon={<Crown/>}/><Stat label="TOTAL EXPERIENCE" value={progress.xp.toLocaleString()} detail="XP earned" icon={<Sparkles/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length).padStart(2,'0')} detail={`of ${modules.length} available`} icon={<BookOpen/>}/><Stat label="TACTICS SOLVED" value={String(progress.solvedPuzzles.length).padStart(2,'0')} detail="unique positions" icon={<Target/>}/></div>
+    <DueReviewPanel progress={progress} openLesson={openLesson}/>
     <section className="section"><header><div><small>A LITTLE PRACTICE, EVERY DAY</small><h2>Today's missions</h2></div><button className="text-link" onClick={()=>navigate('progress')}>Your progress <ChevronRight/></button></header><div className="missions">{dailyMissions.map((m,i)=>{const amount=m.kind==='puzzles'?progress.dailyPuzzleCount:m.kind==='lesson'?progress.dailyLessonCount:progress.dailyMoveCount;const done=progress.completedMissions.includes(m.id);return <button className={`mission ${done?'complete':''}`} key={m.id} onClick={()=>navigate(m.kind==='puzzles'?'puzzles':m.kind==='lesson'?'learn':'play')}><div className="mission-top"><span>{i===0?<Target/>:i===1?<Lightbulb/>:<Gamepad2/>}</span><b>+{m.reward} XP</b></div><strong>{m.title}</strong><p>{m.detail}</p><div className="progress-line"><i><b style={{width:`${done?100:Math.min(100,amount/m.goal*100)}%`}}/></i><small>{done?'DONE':`${Math.min(amount,m.goal)}/${m.goal}`}</small></div></button>;})}</div></section>
     <section className="continue"><span>♞</span><div><small>PICK UP WHERE YOU LEFT OFF</small><h3>{featured.title}</h3><p>{featured.subtitle}. A focused lesson with practical checkpoints.</p><em>{featured.minutes} MIN · +{featured.xp} XP · {featured.level}</em></div><button onClick={()=>openLesson(featured)} aria-label="Open lesson"><ChevronRight/></button></section>
     <section className="section"><header><div><small>EXPLORE THE ACADEMY</small><h2>Choose your next skill</h2></div><button className="text-link" onClick={()=>navigate('learn')}>All courses <ChevronRight/></button></header><div className="courses">{modules.slice(0,3).map((m,i)=><CourseCard key={m.id} item={m} index={i} done={progress.completedLessons.includes(m.id)} onClick={()=>openLesson(m)}/>)}</div></section>
   </>;
 }
 
-function LearnPage({progress,openLesson}:{progress:ProgressState;openLesson:(m:Module)=>void}){const [filter,setFilter]=useState('All');const categories=['All','Foundations','Tactics','Calculation','Strategy','Endgames'];const visible=modules.filter(m=>filter==='All'||m.category===filter);return <><PageTitle eyebrow="THE LEARNING PATH" title="Build your chess foundation." subtitle="Short, focused lessons. Useful ideas. Skills that carry into your games."/><div className="learning-callout"><GraduationCap/><div><b>Your academy is growing.</b><p>Complete lessons to build your skill history. Interactive examples and spaced review are planned next.</p></div><strong>{progress.completedLessons.length}/{modules.length}<small>MASTERED</small></strong></div><div className="filters">{categories.map(c=><button key={c} className={filter===c?'selected':''} onClick={()=>setFilter(c)}>{c}</button>)}</div><div className="courses">{visible.map((m,i)=><CourseCard key={m.id} item={m} index={i} done={progress.completedLessons.includes(m.id)} onClick={()=>openLesson(m)}/>)}</div><div className="info-note"><Brain/><div><b>Mastery over memorization</b><p>Learn an idea, study the checkpoints, then test it in new positions as the curriculum expands.</p></div></div></>;}
+function LearnPage({progress,openLesson}:{progress:ProgressState;openLesson:(m:Module)=>void}){const [filter,setFilter]=useState('All');const categories=['All','Foundations','Tactics','Calculation','Strategy','Endgames'];const visible=modules.filter(m=>filter==='All'||m.category===filter);return <><PageTitle eyebrow="THE LEARNING PATH" title="Build your chess foundation." subtitle="Short, focused lessons. Useful ideas. Skills that carry into your games."/><div className="learning-callout"><GraduationCap/><div><b>Your academy is growing.</b><p>Complete lessons to build your skill history. Interactive examples and spaced review are planned next.</p></div><strong>{progress.completedLessons.length}/{modules.length}<small>MASTERED</small></strong></div><DueReviewPanel progress={progress} openLesson={openLesson}/><div className="filters">{categories.map(c=><button key={c} className={filter===c?'selected':''} onClick={()=>setFilter(c)}>{c}</button>)}</div><div className="courses">{visible.map((m,i)=><CourseCard key={m.id} item={m} index={i} done={progress.completedLessons.includes(m.id)} onClick={()=>openLesson(m)}/>)}</div><div className="info-note"><Brain/><div><b>Mastery over memorization</b><p>Learn an idea, study the checkpoints, then test it in new positions as the curriculum expands.</p></div></div></>;}
 
 function PuzzlePage({onSolved}:{onSolved:(id:string,seconds:number)=>void}){
   const [index,setIndex]=useState(0);const [fen,setFen]=useState(puzzles[0].fen);const [result,setResult]=useState<'ready'|'correct'|'wrong'>('ready');const [hint,setHint]=useState(false);const started=useMemo(()=>Date.now(),[index]);const puzzle=puzzles[index];
@@ -218,17 +240,19 @@ function PlayPage({onMove}:{onMove:()=>void}){
 
 function ProgressPage({progress,level,navigate}:{progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void}){const percent=Math.max(0,Math.min(100,(progress.xp-level.current)/(level.next-level.current)*100));const skills=[['Foundations','Board vision and piece safety',progress.completedLessons.includes('board-vision')?1:0,1],['Tactical vision','Patterns and forcing moves',progress.solvedPuzzles.length,5],['Calculation','Candidate moves and variations',progress.completedLessons.includes('forcing-moves')?1:0,4],['Strategy','Plans and pawn structures',progress.completedLessons.filter(id=>['pawn-structures','prophylaxis'].includes(id)).length,5],['Endgames','Technical and practical endings',progress.completedLessons.includes('rook-endgames')?1:0,5]] as const;return <><PageTitle eyebrow="YOUR PLAYER PROFILE" title="Progress you can build on." subtitle="Track what you've completed and which areas of chess you've explored."/><div className="rank-card panel"><Crown/><div><small>YOUR CURRENT RANK</small><h2>Level {level.level} · {level.title}</h2><p>{progress.xp.toLocaleString()} XP earned</p></div><strong>{String(level.level).padStart(2,'0')}</strong><div className="rank-progress"><span>{level.next-progress.xp} XP to next level</span><i><b style={{width:`${percent}%`}}/></i></div></div><div className="stats"><Stat label="CURRENT STREAK" value={String(progress.streak)} detail="active days" icon={<Flame/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length)} detail={`of ${modules.length}`} icon={<GraduationCap/>}/><Stat label="POSITIONS SOLVED" value={String(progress.solvedPuzzles.length)} detail="unique puzzles" icon={<Target/>}/><Stat label="MOVES PRACTICED" value={String(progress.playedMoves)} detail="legal moves" icon={<Gamepad2/>}/></div><section className="section"><header><div><small>SKILL DEVELOPMENT</small><h2>Your chess profile</h2></div><span className="pill">EARLY ACCESS</span></header><div className="skill-list panel">{skills.map(s=><div className="skill-row" key={s[0]}><div><b>{s[0]}</b><span>{s[1]}</span></div><i><b style={{width:`${Math.min(100,s[2]/s[3]*100)}%`}}/></i><strong>{s[2]}/{s[3]}</strong></div>)}</div></section><div className="next-step"><div><small>KEEP BUILDING</small><h3>Your next best step</h3><p>Continue through the academy and return to the tactics lab.</p></div><button className="btn primary" onClick={()=>navigate('learn')}>Continue learning <ChevronRight/></button></div></>;}
 
-function LessonModal({module,alreadyDone,close,complete}:{module:Module;alreadyDone:boolean;close:()=>void;complete:()=>void}){
+function LessonModal({module,alreadyDone,close,complete}:{module:Module;alreadyDone:boolean;close:()=>void;complete:(grade:ReviewGrade)=>void}){
   const [checked,setChecked]=useState<number[]>([]);
-  const [answer,setAnswer]=useState<number|null>(null);
-  const [submitted,setSubmitted]=useState(false);
+  const [answers,setAnswers]=useState<Record<number,number>>({});
+  const [submitted,setSubmitted]=useState<Record<number,boolean>>({});
+  const [grade,setGrade]=useState<ReviewGrade|null>(null);
   const content=lessonContent[module.id];
-  const correct=answer===content.knowledgeCheck.answerIndex;
-  const ready=checked.length===module.lessons.length&&correct&&submitted;
+  const questions=content.knowledgeChecks;
+  const allCorrect=questions.every((question,i)=>submitted[i]&&answers[i]===question.answerIndex);
+  const ready=checked.length===module.lessons.length&&allCorrect&&grade!==null;
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
     <section className="lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lesson-title">
       <button className="modal-close icon" onClick={close} aria-label="Close lesson"><X/></button>
-      <div className="modal-art">♞<small>CHESSFORGE ACADEMY · GUIDED LESSON</small></div>
+      <div className="modal-art">♞<small>CHESSFORGE ACADEMY · {alreadyDone?'SCHEDULED REVIEW':'GUIDED LESSON'}</small></div>
       <div className="modal-body">
         <small>{module.category} · {module.level} · {module.minutes} MIN</small>
         <h2 id="lesson-title">{module.title}</h2>
@@ -245,23 +269,47 @@ function LessonModal({module,alreadyDone,close,complete}:{module:Module;alreadyD
           </article>)}
         </div>
         <section className="lesson-quiz">
-          <small>KNOWLEDGE CHECK</small>
-          <h3>{content.knowledgeCheck.question}</h3>
-          <div className="lesson-options">
-            {content.knowledgeCheck.options.map((option,i)=><button type="button" key={option} className={'lesson-option '+(answer===i?'selected':'')} aria-pressed={answer===i} onClick={()=>{setAnswer(i);setSubmitted(false);}}>
-              <span>{String.fromCharCode(65+i)}</span>{option}
-            </button>)}
-          </div>
-          <div className="lesson-quiz-actions">
-            <button className="btn secondary" disabled={answer===null} onClick={()=>setSubmitted(true)}>Check answer</button>
-            {submitted&&<p className={correct?'lesson-feedback correct':'lesson-feedback'}>{correct?'Correct. ': 'Not quite. '} {content.knowledgeCheck.explanation}</p>}
-          </div>
+          <small>RETRIEVAL CHECK · {questions.length} QUESTIONS</small>
+          <h3>Test what you remember before viewing the explanations again.</h3>
+          {questions.map((question,i)=>{
+            const isSubmitted=Boolean(submitted[i]);
+            const isCorrect=answers[i]===question.answerIndex;
+            return <article className="lesson-question" key={module.id + '-' + i}>
+              <div className="lesson-question-heading"><small>QUESTION 0{i+1}</small><b>{question.question}</b></div>
+              <div className="lesson-options">
+                {question.options.map((option,j)=><button type="button" key={option}
+                  className={'lesson-option '+(answers[i]===j?'selected ':'')+(isSubmitted&&isCorrect&&answers[i]===j?'correct ':'')+(isSubmitted&&!isCorrect&&answers[i]===j?'incorrect':'')}
+                  aria-pressed={answers[i]===j}
+                  disabled={isSubmitted&&isCorrect}
+                  onClick={()=>{setAnswers(p=>({...p,[i]:j}));setSubmitted(p=>({...p,[i]:false}));setGrade(null);}}>
+                  <span>{String.fromCharCode(65+j)}</span>{option}
+                </button>)}
+              </div>
+              <div className="lesson-quiz-actions">
+                <button className="btn secondary" disabled={answers[i]===undefined||isSubmitted&&isCorrect} onClick={()=>setSubmitted(p=>({...p,[i]:true}))}>Check answer</button>
+                {isSubmitted&&<p className={isCorrect?'lesson-feedback correct':'lesson-feedback'}>{isCorrect?'Correct. ':'Not quite. '}{question.explanation}</p>}
+              </div>
+            </article>;
+          })}
         </section>
+        {checked.length===module.lessons.length&&allCorrect&&<section className="recall-rating">
+          <small>SET YOUR NEXT REVIEW</small>
+          <h3>How difficult was it to recall these ideas?</h3>
+          <p>Choose honestly. Easier recall schedules a longer gap; difficult recall brings the lesson back sooner.</p>
+          <div className="rating-options">
+            {([
+              ['again','Need another look'],
+              ['hard','Difficult'],
+              ['good','Comfortable'],
+              ['easy','Easy'],
+            ] as [ReviewGrade,string][]).map(([value,label])=><button type="button" key={value} className={grade===value?'rating-button selected':'rating-button'} aria-pressed={grade===value} onClick={()=>setGrade(value)}>{label}</button>)}
+          </div>
+        </section>}
         <div className="modal-footer">
-          <em>✦ {module.xp} XP {alreadyDone?'already earned':'on completion'}</em>
-          <button className="btn primary" disabled={!ready||alreadyDone} onClick={complete}>{alreadyDone?'Already mastered':ready?'Complete lesson':'Review all sections and pass the check'}</button>
+          <em>{alreadyDone?'Review · no extra XP':'✦ '+module.xp+' XP on first completion'}</em>
+          <button className="btn primary" disabled={!ready} onClick={()=>grade&&complete(grade)}>{alreadyDone?'Save review':ready?'Complete lesson':'Read sections, pass all checks, and rate recall'}</button>
         </div>
-        <p className="disclaimer">Lesson completion now requires reading all four sections and answering the knowledge check correctly. Your progress is stored in this browser.</p>
+        <p className="disclaimer">Completion requires reviewing every section, answering all three checks correctly, and rating recall. Reviews never award duplicate lesson XP.</p>
       </div>
     </section>
   </div>;

@@ -1,4 +1,5 @@
 import type { Mission } from '../data/content';
+import { dueReviewCards, scheduleReviewCard, type ReviewCard, type ReviewGrade } from './spaced-repetition';
 
 const STORAGE_KEY = 'chessforge.progress.v1';
 
@@ -8,6 +9,7 @@ export type ProgressState = {
   completedMissions: string[];
   solvedPuzzles: string[];
   dailySolvedPuzzles: string[];
+  reviewCards: ReviewCard[];
   bestPuzzleSeconds: number | null;
   playedMoves: number;
   streak: number;
@@ -24,6 +26,7 @@ const initial: ProgressState = {
   completedMissions: [],
   solvedPuzzles: [],
   dailySolvedPuzzles: [],
+  reviewCards: [],
   bestPuzzleSeconds: null,
   playedMoves: 0,
   streak: 0,
@@ -74,6 +77,7 @@ export function readProgress(): ProgressState {
       completedMissions: Array.isArray(parsed.completedMissions) ? parsed.completedMissions : [],
       solvedPuzzles: Array.isArray(parsed.solvedPuzzles) ? parsed.solvedPuzzles : [],
       dailySolvedPuzzles: Array.isArray(parsed.dailySolvedPuzzles) ? parsed.dailySolvedPuzzles : [],
+      reviewCards: Array.isArray(parsed.reviewCards) ? parsed.reviewCards : [],
     };
     return resetDailyProgress(merged);
   } catch {
@@ -101,9 +105,30 @@ function awardMission(progress: ProgressState, id: string, reward: number, date:
   return { ...earned, completedMissions: [...earned.completedMissions, id] };
 }
 
-export function recordLessonComplete(progress: ProgressState, lessonId: string, xp: number, date = new Date()): ProgressState {
+export function recordLessonReview(progress: ProgressState, lessonId: string, grade: ReviewGrade, date = new Date()): ProgressState {
+  const next = markActiveDay(resetDailyProgress(progress, date), date);
+  if (!next.completedLessons.includes(lessonId)) return next;
+  const previous = next.reviewCards.find((card) => card.lessonId === lessonId);
+  const updated = scheduleReviewCard(previous, lessonId, grade, date);
+  return {
+    ...next,
+    reviewCards: [...next.reviewCards.filter((card) => card.lessonId !== lessonId), updated],
+  };
+}
+
+export function getDueReviewCards(progress: ProgressState, date = new Date()): ReviewCard[] {
+  return dueReviewCards(progress.reviewCards, date);
+}
+
+export function recordLessonComplete(
+  progress: ProgressState,
+  lessonId: string,
+  xp: number,
+  date = new Date(),
+  grade: ReviewGrade = 'good',
+): ProgressState {
   let next = markActiveDay(resetDailyProgress(progress, date), date);
-  if (next.completedLessons.includes(lessonId)) return next;
+  if (next.completedLessons.includes(lessonId)) return recordLessonReview(next, lessonId, grade, date);
   next = {
     ...next,
     completedLessons: [...next.completedLessons, lessonId],
@@ -111,7 +136,7 @@ export function recordLessonComplete(progress: ProgressState, lessonId: string, 
   };
   next = awardXp(next, xp, date);
   if (next.dailyLessonCount >= 1) next = awardMission(next, 'learn', 120, date);
-  return next;
+  return recordLessonReview(next, lessonId, grade, date);
 }
 
 export function recordPuzzleSolve(progress: ProgressState, puzzleId: string, seconds: number, date = new Date()): ProgressState {
