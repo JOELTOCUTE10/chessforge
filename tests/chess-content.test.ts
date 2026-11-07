@@ -82,6 +82,6 @@ describe('PGN game records', () => {
     const imported = new Chess();
     imported.loadPgn(exported, { strict: true });
     expect(imported.fen()).toBe(original.fen());
-    expect(imported.history()).toEqual(['Rh7']);
+    expect(imported.history()).toEqual(['Rh7+']);
   });
 });
