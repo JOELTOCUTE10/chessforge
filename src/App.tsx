@@ -158,8 +158,7 @@ function PlayPage({onMove}:{onMove:()=>void}){
     try{
       const imported=new Chess();
       imported.loadPgn(pgnText,{strict:true});
-      const fenLine = pgnText.replaceAll('', '').split('
-').find(line => line.startsWith('[FEN "'));
+      const fenLine = pgnText.replaceAll(String.fromCharCode(13), '').split(String.fromCharCode(10)).find(line => line.startsWith('[FEN "'));
       const importedStartFen = fenLine ? fenLine.substring(6, fenLine.length - 2) : new Chess().fen();
       const moves=imported.history();
       const replay=new Chess(importedStartFen);
