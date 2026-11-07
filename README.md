@@ -12,7 +12,7 @@ This repository contains the first playable foundation (v0.1):
 
 - Responsive dashboard and navigation.
 - Legal chess move handling through `chess.js`.
-- Practice board with move history, undo, reset, board flip, and promotion selection.
+- Practice board with move history, undo, reset, board flip, promotion selection, and PGN import/export.
 - Starter tactics set with solution feedback and hints.
 - Starter opening explorer with move-by-move board playback.
 - Lesson catalogue with checkpoint completion.
@@ -20,7 +20,7 @@ This repository contains the first playable foundation (v0.1):
 - Player progress dashboard.
 - GitHub Actions build, chess-content checks, npm security audit, and Pages deployment.
 
-This is not yet a complete chess platform. Stockfish-powered analysis, engine play, PGN import/export, full opening coverage, a large puzzle database, adaptive spaced repetition, game review, and social/tournament features remain planned work.
+This is not yet a complete chess platform. Stockfish-powered analysis, engine play, full opening coverage, a large puzzle database, adaptive spaced repetition, game review, a saved-game library, and social/tournament features remain planned work.
 
 ## Run locally
 

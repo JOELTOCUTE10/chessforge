@@ -94,11 +94,127 @@ function PuzzlePage({onSolved}:{onSolved:(id:string,seconds:number)=>void}){
 
 function OpeningsPage(){const [active,setActive]=useState(0);const [ply,setPly]=useState(0);const opening=openings[active];const game=useMemo(()=>{const g=new Chess();for(const san of opening.moves.slice(0,ply))g.move(san);return g;},[opening,ply]);return <><PageTitle eyebrow="OPENING LIBRARY" title="Understand the opening." subtitle="Explore a starter collection of legal move sequences. This is not yet the complete opening encyclopedia."/><div className="opening-layout"><aside className="panel opening-list"><small>STARTER COLLECTION</small>{openings.map((o,i)=><button key={o.id} className={active===i?'selected':''} onClick={()=>{setActive(i);setPly(0);}}><small>{o.eco}</small><b>{o.name}</b><span>{o.difficulty}</span></button>)}</aside><section className="panel opening-detail"><small>{opening.eco} · {opening.difficulty.toUpperCase()}</small><h2>{opening.name}</h2><p>{opening.summary}</p><div className="opening-board"><ChessBoard fen={game.fen()} onMove={()=>undefined} disabled/></div><div className="board-actions"><button className="btn secondary" disabled={!ply} onClick={()=>setPly(p=>p-1)}>Previous</button><span>{ply}/{opening.moves.length} plies</span><button className="btn secondary" disabled={ply===opening.moves.length} onClick={()=>setPly(p=>p+1)}>Next move</button><button className="btn secondary" onClick={()=>setPly(0)}>Restart</button></div><div className="move-chips">{opening.moves.map((m,i)=><button key={`${m}${i}`} className={i<ply?'played':''} onClick={()=>setPly(i+1)}>{Math.floor(i/2)+1}{i%2===0?'.':'...'} {m}</button>)}</div><h3>Ideas to understand</h3>{opening.ideas.map((idea,i)=><div className="idea" key={idea}><small>0{i+1}</small>{idea}</div>)}</section></div></>;}
 
-function PlayPage({onMove}:{onMove:()=>void}){const [fens,setFens]=useState([new Chess().fen()]);const [sans,setSans]=useState<string[]>([]);const [orientation,setOrientation]=useState<'w'|'b'>('w');const fen=fens[fens.length-1];const game=useMemo(()=>new Chess(fen),[fen]);const status=game.isCheckmate()?`Checkmate — ${game.turn()==='w'?'Black':'White'} wins.`:game.isDraw()?'Draw — game ended.':`${game.turn()==='w'?'White':'Black'} to move${game.isCheck()?' · Check':''}`;
-  function move(from:string,to:string,promotion?:string){const next=new Chess(fen);try{const m=next.move({from:from as never,to:to as never,promotion:(promotion??'q') as never});setFens(f=>[...f,next.fen()]);setSans(s=>[...s,m.san]);onMove();}catch{/* ChessBoard only emits legal destinations. */}}
-  function undo(){if(fens.length>1){setFens(f=>f.slice(0,-1));setSans(s=>s.slice(0,-1));}}
-  function reset(){setFens([new Chess().fen()]);setSans([]);}
-  return <><PageTitle eyebrow="PRACTICE BOARD" title="Play with purpose." subtitle="Practice legal moves, explore ideas, and review the move sequence. Engine play and deeper analysis are planned next."/><div className="two-column"><section className="panel play-panel"><header><b>{status}</b><button className="text-link" onClick={()=>setOrientation(o=>o==='w'?'b':'w')}>Flip board <RotateCcw/></button></header><div className="training-board"><ChessBoard fen={fen} onMove={move} orientation={orientation} disabled={game.isGameOver()}/></div><div className="board-actions"><button className="btn secondary" onClick={undo} disabled={fens.length===1}><Undo2/> Undo</button><button className="btn secondary" onClick={reset}><RotateCcw/> New game</button><span>{sans.length} plies</span></div></section><aside className="panel move-panel"><small>GAME RECORD</small><h3>Move history</h3>{sans.length?Array.from({length:Math.ceil(sans.length/2)},(_,i)=><div className="move-row" key={i}><small>{i+1}.</small><b>{sans[i*2]}</b><b>{sans[i*2+1]??''}</b></div>):<div className="empty">♙<b>The board is ready.</b><span>Your moves appear here.</span></div>}<div className="tip"><Lightbulb/><b>Before every move</b><p>What is your opponent threatening? What are your forcing moves? What becomes weak after you move?</p></div></aside></div></>;}
+function PlayPage({onMove}:{onMove:()=>void}){
+  const [startFen,setStartFen]=useState(()=>new Chess().fen());
+  const [fens,setFens]=useState([startFen]);
+  const [sans,setSans]=useState<string[]>([]);
+  const [orientation,setOrientation]=useState<'w'|'b'>('w');
+  const [importOpen,setImportOpen]=useState(false);
+  const [pgnText,setPgnText]=useState('');
+  const [importError,setImportError]=useState('');
+  const [importMessage,setImportMessage]=useState('');
+  const fen=fens[fens.length-1];
+  const game=useMemo(()=>new Chess(fen),[fen]);
+  const turn=game.turn()==='w'?'White':'Black';
+  const status=game.isCheckmate()?('Checkmate — '+(game.turn()==='w'?'Black':'White')+' wins.'):game.isDraw()?'Draw — game ended.':turn+' to move'+(game.isCheck()?' · Check':'');
+
+  function move(from:string,to:string,promotion?:string){
+    const next=new Chess(fen);
+    try{
+      const m=next.move({from:from as never,to:to as never,promotion:(promotion??'q') as never});
+      setFens(f=>[...f,next.fen()]);
+      setSans(s=>[...s,m.san]);
+      setImportMessage('');
+      onMove();
+    }catch{/* ChessBoard only emits legal destinations. */}
+  }
+  function undo(){
+    if(fens.length>1){
+      setFens(f=>f.slice(0,-1));
+      setSans(s=>s.slice(0,-1));
+      setImportMessage('');
+    }
+  }
+  function reset(){
+    const initialFen=new Chess().fen();
+    setStartFen(initialFen);
+    setFens([initialFen]);
+    setSans([]);
+    setImportError('');
+    setImportMessage('');
+    setPgnText('');
+  }
+  function exportPgn(){
+    if(!sans.length)return;
+    try{
+      const replay=new Chess(startFen);
+      for(const san of sans)replay.move(san);
+      const blob=new Blob([replay.pgn()],{type:'application/x-chess-pgn;charset=utf-8'});
+      const url=URL.createObjectURL(blob);
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='chessforge-practice.pgn';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch{
+      setImportError('This game could not be exported. Reset the board and try again.');
+    }
+  }
+  function importPgn(){
+    setImportError('');
+    setImportMessage('');
+    try{
+      const imported=new Chess();
+      imported.loadPgn(pgnText,{strict:true});
+      const fenHeader=pgnText.match(/^\\[FEN\\s+"([^"]+)"\\]/m);
+      const importedStartFen=fenHeader?.[1]??new Chess().fen();
+      const moves=imported.history();
+      const replay=new Chess(importedStartFen);
+      const replayFens=[replay.fen()];
+      for(const san of moves){
+        replay.move(san);
+        replayFens.push(replay.fen());
+      }
+      setStartFen(importedStartFen);
+      setFens(replayFens);
+      setSans(moves);
+      setOrientation('w');
+      setImportMessage('Imported '+moves.length+' plies successfully.');
+      setPgnText('');
+      setImportOpen(false);
+    }catch(error){
+      setImportError(error instanceof Error?error.message:'The PGN could not be read. Check the notation and try again.');
+    }
+  }
+
+  return <>
+    <PageTitle eyebrow="PRACTICE BOARD" title="Play with purpose." subtitle="Practice legal moves, review the move sequence, and move games between ChessForge and other chess tools using PGN."/>
+    <div className="two-column">
+      <section className="panel play-panel">
+        <header><b>{status}</b><button className="text-link" onClick={()=>setOrientation(o=>o==='w'?'b':'w')}>Flip board <RotateCcw/></button></header>
+        <div className="training-board"><ChessBoard fen={fen} onMove={move} orientation={orientation} disabled={game.isGameOver()}/></div>
+        <div className="board-actions">
+          <button className="btn secondary" onClick={undo} disabled={fens.length===1}><Undo2/> Undo</button>
+          <button className="btn secondary" onClick={reset}><RotateCcw/> New game</button>
+          <span>{sans.length} plies</span>
+        </div>
+        <div className="pgn-actions">
+          <button className="btn secondary" onClick={exportPgn} disabled={!sans.length}>Export PGN</button>
+          <button className="btn secondary" onClick={()=>{setImportOpen(v=>!v);setImportError('');}}>Import PGN</button>
+        </div>
+        {importMessage&&<p className="pgn-message">{importMessage}</p>}
+        {importOpen&&<div className="pgn-import-panel">
+          <label className="pgn-label">PASTE A PGN GAME
+            <textarea className="pgn-textarea" value={pgnText} onChange={e=>setPgnText(e.target.value)} placeholder={'[Event "Casual game"]\\n\\n1. e4 e5 2. Nf3 Nc6'} rows={7}/>
+          </label>
+          <p className="pgn-help">Strict standard algebraic notation is checked before the board is replaced. PGNs with a FEN starting-position header are supported.</p>
+          {importError&&<p className="pgn-error">{importError}</p>}
+          <div className="pgn-actions">
+            <button className="btn primary" onClick={importPgn} disabled={!pgnText.trim()}>Load game</button>
+            <button className="btn secondary" onClick={()=>{setImportOpen(false);setImportError('');}}>Cancel</button>
+          </div>
+        </div>}
+      </section>
+      <aside className="panel move-panel">
+        <small>GAME RECORD</small><h3>Move history</h3>
+        {sans.length?Array.from({length:Math.ceil(sans.length/2)},(_,i)=><div className="move-row" key={i}><small>{i+1}.</small><b>{sans[i*2]}</b><b>{sans[i*2+1]??''}</b></div>):<div className="empty">♙<b>The board is ready.</b><span>Your moves appear here.</span></div>}
+        <div className="tip"><Lightbulb/><b>Before every move</b><p>What is your opponent threatening? What are your forcing moves? What becomes weak after you move?</p></div>
+      </aside>
+    </div>
+  </>;
+}
 
 function ProgressPage({progress,level,navigate}:{progress:ProgressState;level:ReturnType<typeof playerLevel>;navigate:(tab:Tab)=>void}){const percent=Math.max(0,Math.min(100,(progress.xp-level.current)/(level.next-level.current)*100));const skills=[['Foundations','Board vision and piece safety',progress.completedLessons.includes('board-vision')?1:0,1],['Tactical vision','Patterns and forcing moves',progress.solvedPuzzles.length,5],['Calculation','Candidate moves and variations',progress.completedLessons.includes('forcing-moves')?1:0,4],['Strategy','Plans and pawn structures',progress.completedLessons.filter(id=>['pawn-structures','prophylaxis'].includes(id)).length,5],['Endgames','Technical and practical endings',progress.completedLessons.includes('rook-endgames')?1:0,5]] as const;return <><PageTitle eyebrow="YOUR PLAYER PROFILE" title="Progress you can build on." subtitle="Track what you've completed and which areas of chess you've explored."/><div className="rank-card panel"><Crown/><div><small>YOUR CURRENT RANK</small><h2>Level {level.level} · {level.title}</h2><p>{progress.xp.toLocaleString()} XP earned</p></div><strong>{String(level.level).padStart(2,'0')}</strong><div className="rank-progress"><span>{level.next-progress.xp} XP to next level</span><i><b style={{width:`${percent}%`}}/></i></div></div><div className="stats"><Stat label="CURRENT STREAK" value={String(progress.streak)} detail="active days" icon={<Flame/>}/><Stat label="LESSONS MASTERED" value={String(progress.completedLessons.length)} detail={`of ${modules.length}`} icon={<GraduationCap/>}/><Stat label="POSITIONS SOLVED" value={String(progress.solvedPuzzles.length)} detail="unique puzzles" icon={<Target/>}/><Stat label="MOVES PRACTICED" value={String(progress.playedMoves)} detail="legal moves" icon={<Gamepad2/>}/></div><section className="section"><header><div><small>SKILL DEVELOPMENT</small><h2>Your chess profile</h2></div><span className="pill">EARLY ACCESS</span></header><div className="skill-list panel">{skills.map(s=><div className="skill-row" key={s[0]}><div><b>{s[0]}</b><span>{s[1]}</span></div><i><b style={{width:`${Math.min(100,s[2]/s[3]*100)}%`}}/></i><strong>{s[2]}/{s[3]}</strong></div>)}</div></section><div className="next-step"><div><small>KEEP BUILDING</small><h3>Your next best step</h3><p>Continue through the academy and return to the tactics lab.</p></div><button className="btn primary" onClick={()=>navigate('learn')}>Continue learning <ChevronRight/></button></div></>;}
 

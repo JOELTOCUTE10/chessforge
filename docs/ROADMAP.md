@@ -15,7 +15,8 @@
 
 - [ ] Stockfish WebAssembly worker integration and engine settings
 - [ ] Human versus engine practice with adjustable strength
-- [ ] PGN import, export, and saved games
+- [x] PGN import/export for local practice games
+- [ ] Saved-game library with tags, search, and cloud sync
 - [ ] Full puzzle attempt records, themes, difficulty, and accuracy metrics
 - [ ] Interactive lesson positions with guided move trees
 - [ ] Real spaced-repetition scheduling with due reviews

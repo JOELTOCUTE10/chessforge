@@ -53,3 +53,35 @@ describe('chess rules relied on by the board', () => {
     expect(game.get('a8')?.type).toBe('q');
   });
 });
+
+
+describe('PGN game records', () => {
+  it('exports and imports a game without changing its move history or final position', () => {
+    const original = new Chess();
+    const moves = ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6'];
+    for (const san of moves) original.move(san);
+
+    const exported = original.pgn();
+    const imported = new Chess();
+    imported.loadPgn(exported, { strict: true });
+
+    expect(imported.history()).toEqual(moves);
+    expect(imported.fen()).toBe(original.fen());
+  });
+
+  it('rejects invalid PGN moves instead of silently loading a partial game', () => {
+    const imported = new Chess();
+    expect(() => imported.loadPgn('1. e5', { strict: true })).toThrow();
+  });
+
+  it('loads a PGN that starts from a custom FEN position', () => {
+    const fen = '7k/8/8/8/8/8/8/K6R w - - 0 1';
+    const original = new Chess(fen);
+    original.move('Rh7');
+    const exported = original.pgn();
+    const imported = new Chess();
+    imported.loadPgn(exported, { strict: true });
+    expect(imported.fen()).toBe(original.fen());
+    expect(imported.history()).toEqual(['Rh7']);
+  });
+});
